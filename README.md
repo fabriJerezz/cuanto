@@ -1,39 +1,39 @@
 # Cuánto
 
-Personal money tracker: how much of the money in your accounts is really yours once you subtract this month's pending payments and the money you hold for other people ("plata libre real").
+Monitor de gastos personal: cuánto de la plata que tenés en tus cuentas es realmente tuya una vez que restás los pagos pendientes del mes y la plata que tenés de otras personas ("plata libre real").
 
-Monorepo with pnpm workspaces:
+Monorepo con pnpm workspaces:
 
-- `apps/api` — NestJS 12 + TypeORM + SQLite (better-sqlite3). REST API under `/api`.
+- `apps/api` — NestJS 12 + TypeORM + SQLite (better-sqlite3). API REST bajo `/api`.
 - `apps/web` — React 19 + Vite + Tailwind v4 + shadcn/ui, TanStack Query, React Router.
 
-## Run
+## Correr
 
 ```sh
 pnpm install
-pnpm dev        # api on :3000, web on :5173 (proxies /api)
-pnpm test       # api e2e tests (in-memory SQLite)
+pnpm dev        # api en :3000, web en :5173 (hace proxy de /api)
+pnpm test       # tests e2e de la api (SQLite en memoria)
 pnpm build
 ```
 
-The database is `apps/api/cuanto.sqlite` (override with `DB_PATH`). The schema is synced on boot; there are no migrations yet. With no accounts the app opens the "Primer uso" onboarding.
+La base de datos es `apps/api/cuanto.sqlite` (se cambia con `DB_PATH`). El esquema se sincroniza al arrancar; todavía no hay migraciones. Sin cuentas cargadas, la app abre el onboarding de "Primer uso".
 
-## Model
+## Modelo
 
-| Entity | Fields | Notes |
+| Entidad | Campos | Notas |
 | --- | --- | --- |
-| `Account` | name, type (`cash`/`bank`/`wallet`/`credit_card`), initialBalance, dueDay | A credit card's balance is negative: its debt. |
-| `Person` | name, kind (`person`/`group`) | Balance is derived from movements. |
-| `Event` | name, person, closed | Groups shared spending (a trip, a dinner). |
-| `Category` | name, monthlyLimit | Budgets. |
-| `FixedExpense` | name, amount, dayOfMonth, account | Shows up every month as a pending payment. |
+| `Account` | name, type (`cash`/`bank`/`wallet`/`credit_card`), initialBalance, dueDay | El saldo de una tarjeta de crédito es negativo: es su deuda. |
+| `Person` | name, kind (`person`/`group`) | El saldo se calcula a partir de los movimientos. |
+| `Event` | name, person, closed | Agrupa gastos compartidos (un viaje, una cena). |
+| `Category` | name, monthlyLimit | Presupuestos. |
+| `FixedExpense` | name, amount, dayOfMonth, account | Aparece todos los meses como pago pendiente. |
 | `Movement` | type (`income`/`expense`/`transfer`), amount, description, date, account, toAccount, category, isOthers, person, relation, event, fixedExpense | |
 
-Derived numbers (see `apps/api/src/ledger.ts`):
+Números derivados (ver `apps/api/src/ledger.ts`):
 
-- **Account balance** = initial balance + income − expenses ± transfers.
-- **Balance with a person** (positive = they owe you): sum over their movements with someone else's money, where an expense adds and an income subtracts.
-- **Pending payments** = fixed expenses with no payment movement this month + credit card debt.
-- **Plata libre real** = money in non-card accounts − pending payments − what you owe other people.
+- **Saldo de una cuenta** = saldo inicial + ingresos − egresos ± transferencias.
+- **Saldo con una persona** (positivo = te debe): suma de sus movimientos con plata de otros, donde un egreso suma y un ingreso resta.
+- **Pagos pendientes** = gastos fijos sin movimiento de pago este mes + deuda de la tarjeta.
+- **Plata libre real** = plata en cuentas que no son tarjeta − pagos pendientes − lo que le debés a otras personas.
 
-Amounts are whole pesos.
+Los montos son pesos enteros.
