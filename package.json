@@ -1,0 +1,9 @@
+{
+  "name": "cuanto",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter api --filter web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  }
+}

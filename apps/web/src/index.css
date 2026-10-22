@@ -1,0 +1,111 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/manrope";
+
+@theme inline {
+  --font-sans: 'Manrope Variable', system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Design palette */
+  --color-brand: #0f6b5c;
+  --color-brand-dark: #0b5a4d;
+  --color-brand-soft: #bfd3cb;
+  --color-owe: #b4540a;
+  --color-owe-strong: #8f3f05;
+  --color-income: #17703e;
+  --color-others: #8a6500;
+  --color-transfer: #1f4fa8;
+  --color-danger: #a82f24;
+  --color-line: rgb(16 32 27 / 0.07);
+}
+
+:root {
+  --background: #e2e7e4;
+  --foreground: #10201b;
+  --card: rgb(255 255 255 / 0.46);
+  --card-foreground: #10201b;
+  --popover: #ffffff;
+  --popover-foreground: #10201b;
+  --primary: #10201b;
+  --primary-foreground: #ffffff;
+  --secondary: rgb(255 255 255 / 0.52);
+  --secondary-foreground: #10201b;
+  --muted: rgb(16 32 27 / 0.06);
+  --muted-foreground: #56665f;
+  --accent: rgb(15 107 92 / 0.12);
+  --accent-foreground: #0b5a4d;
+  --destructive: #a82f24;
+  --border: rgb(16 32 27 / 0.07);
+  --input: rgb(255 255 255 / 0.9);
+  --ring: #0f6b5c;
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply min-h-dvh text-foreground;
+    background:
+      radial-gradient(700px 520px at 12% -4%, #d3e0da 0%, rgb(211 224 218 / 0) 70%),
+      radial-gradient(640px 560px at 105% 28%, #e4dcd2 0%, rgb(228 220 210 / 0) 70%),
+      radial-gradient(720px 620px at 30% 110%, #d3dbe6 0%, rgb(211 219 230 / 0) 70%),
+      #e2e7e4;
+    background-attachment: fixed;
+  }
+}
+
+@utility glass {
+  background: rgb(255 255 255 / 0.46);
+  backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgb(255 255 255 / 0.85);
+  box-shadow: 0 10px 32px rgb(20 50 40 / 0.08);
+}
+
+@utility glass-soft {
+  background: rgb(255 255 255 / 0.32);
+  backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgb(255 255 255 / 0.85);
+}
+
+@utility hero {
+  color: #fff;
+  background: linear-gradient(150deg, rgb(16 32 27 / 0.92) 0%, rgb(15 107 92 / 0.88) 100%);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow: 0 18px 44px rgb(15 60 50 / 0.28);
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
+}
