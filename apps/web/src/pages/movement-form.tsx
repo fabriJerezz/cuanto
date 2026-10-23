@@ -327,7 +327,7 @@ export function MovementFormProvider({ children }: { children: ReactNode }) {
           <section
             role="dialog"
             aria-label={opts.initial ? 'Editar movimiento' : 'Nuevo movimiento'}
-            className="fixed inset-x-0 bottom-0 z-40 flex max-h-[92dvh] flex-col rounded-t-[32px] border border-white/85 bg-[#EEF3F0]/95 shadow-[0_-12px_40px_rgba(20,50,40,0.18)] backdrop-blur-2xl lg:inset-x-auto lg:top-6 lg:right-6 lg:bottom-6 lg:max-h-none lg:w-[420px] lg:rounded-[36px] lg:shadow-[0_22px_54px_rgba(15,60,50,0.22)]"
+            className="fixed inset-x-0 bottom-0 z-40 flex max-h-[92dvh] flex-col rounded-t-[32px] border border-white/85 bg-[#EEF3F0]/95 shadow-[0_-12px_40px_rgba(20,50,40,0.18)] backdrop-blur-2xl lg:inset-x-auto lg:top-6 lg:right-6 lg:bottom-auto lg:max-h-[calc(100dvh-3rem)] lg:w-[420px] lg:rounded-[36px] lg:shadow-[0_22px_54px_rgba(15,60,50,0.22)]"
           >
             <div className="flex shrink-0 items-center justify-between px-6 pt-5 pb-2 lg:px-7 lg:pt-6">
               <h2 className="text-lg font-bold">{opts.initial ? 'Editar movimiento' : 'Nuevo movimiento'}</h2>
