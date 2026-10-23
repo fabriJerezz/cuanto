@@ -55,13 +55,11 @@ export const RELATION_LABEL: Record<Relation, string> = {
   passed_to_spend: 'Me pasó para gastar',
   returned_to_me: 'Me devolvió',
   lent_to_me: 'Me prestó',
-  advanced: 'Adelanté por esa persona',
-  spent_theirs: 'Gasté lo que me pasó',
+  advanced: 'Le presté o pagué por',
   returned: 'Le devolví',
 }
 
 export const INCOME_RELATIONS = ['passed_to_spend', 'returned_to_me', 'lent_to_me'] as const
-export const EXPENSE_RELATIONS = ['advanced', 'spent_theirs', 'returned'] as const
 
 // What a movement does to the balance with that person, as the form previews it.
 export function relationEffect(relation: Relation, name: string, amount: number) {
@@ -74,7 +72,6 @@ export function relationEffect(relation: Relation, name: string, amount: number)
       return `${name} te debe ${m} menos.`
     case 'advanced':
       return `${name} te debe ${m} más.`
-    case 'spent_theirs':
     case 'returned':
       return `Le debés ${m} menos a ${name}.`
   }
@@ -100,15 +97,14 @@ export function movementTitle(m: Movement) {
 
 export function movementSub(m: Movement) {
   if (m.type === 'transfer') return `${m.account.name} → ${m.toAccount?.name ?? ''}`
-  if (!m.isOthers) return m.account.name
+  if (!m.isOthers) return m.event ? `${m.account.name} · ${m.event.name}` : m.account.name
   const p = m.person?.name
-  if (!p) return `${m.account.name} · plata de otros`
+  if (!p) return `${m.account.name} · ${m.type === 'expense' ? 'te deben' : 'plata de otros'}`
   const tail: Record<Relation, string> = {
     passed_to_spend: `plata de ${p}`,
     lent_to_me: `préstamo de ${p}`,
     returned_to_me: `${p} te devolvió`,
     advanced: `${p} te debe`,
-    spent_theirs: `plata de ${p}`,
     returned: `le devolviste a ${p}`,
   }
   return `${m.account.name} · ${m.relation ? tail[m.relation] : p}`
@@ -116,6 +112,16 @@ export function movementSub(m: Movement) {
 
 export const signedMoney = (m: Pick<Movement, 'type' | 'amount'>) =>
   m.type === 'income' ? `+ ${money(m.amount)}` : m.type === 'expense' ? `− ${money(m.amount)}` : money(m.amount)
+
+// Upcoming payments: overdue ones stand out, the next few days get a light accent.
+export function dueState(dueDate: string) {
+  const days = -daysAgo(dueDate)
+  if (days < 0) return { tone: 'overdue' as const, label: `Venció el ${shortDate(dueDate)}` }
+  if (days <= 5) return { tone: 'soon' as const, label: days === 0 ? 'Vence hoy' : days === 1 ? 'Vence mañana' : `Vence en ${days} días` }
+  return { tone: 'later' as const, label: `Vence el ${shortDate(dueDate)}` }
+}
+
+export const listNames = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names.at(-1)}` : (names[0] ?? ''))
 
 export const amountColor = (m: Pick<Movement, 'type' | 'isOthers'>) =>
   m.type === 'transfer' ? 'text-transfer' : m.type === 'expense' ? 'text-foreground' : m.isOthers ? 'text-others' : 'text-income'

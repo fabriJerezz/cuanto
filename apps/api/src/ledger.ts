@@ -20,26 +20,57 @@ export function accountBalances(accounts: Pick<Account, 'id' | 'initialBalance'>
 }
 
 // What someone else's money does to the balance with them. Positive = they owe you.
-// Any expense of their money (advancing, spending what they gave, paying back) moves it up;
-// any income of their money (they gave, lent or paid back) moves it down.
+// Lending or paying them back moves it up; money they hand you (to spend, as a loan or
+// paying you back) moves it down.
 export function othersDelta(m: Mv) {
   if (!m.isOthers || m.type === 'transfer') return 0;
   return m.type === 'expense' ? m.amount : -m.amount;
 }
 
-export function balancesBy(key: 'personId' | 'eventId', movements: Mv[]) {
-  const out = new Map<number | null, number>();
-  for (const m of movements) out.set(m[key], (out.get(m[key]) ?? 0) + othersDelta(m));
+type EventLite = Pick<Event, 'id' | 'includeMe'> & { people: Pick<Person, 'id'>[] };
+
+// Each person's part of a shared event expense, split equally among the event's people
+// (plus you when includeMe). You absorb the rounding when you take part; otherwise the
+// first people pay one peso more.
+export function eventShares(m: Mv, ev: EventLite | undefined) {
+  const out = new Map<number, number>();
+  if (!ev?.people.length || m.type !== 'expense' || m.isOthers) return out;
+  const ids = ev.people.map((p) => p.id).sort((a, b) => a - b);
+  const n = ids.length + (ev.includeMe ? 1 : 0);
+  const base = Math.floor(m.amount / n);
+  let rem = ev.includeMe ? 0 : m.amount - base * n;
+  for (const id of ids) out.set(id, base + (rem-- > 0 ? 1 : 0));
   return out;
 }
 
-// Money they handed you vs. what you already spent of it ("te pasó X, gastaste Y").
-export function rendition(movements: (Mv & Pick<Movement, 'relation'>)[]) {
+export const myShare = (m: Mv, ev: EventLite | undefined) =>
+  m.amount - [...eventShares(m, ev).values()].reduce((s, n) => s + n, 0);
+
+// Balance with each person (null = others' money with nobody assigned) and per event.
+export function balances(movements: Mv[], events: EventLite[]) {
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const person = new Map<number | null, number>();
+  const event = new Map<number, number>();
+  const add = <K>(map: Map<K, number>, k: K, n: number) => n && map.set(k, (map.get(k) ?? 0) + n);
+  for (const m of movements) {
+    const d = othersDelta(m);
+    add(person, m.personId, d);
+    if (m.eventId != null) add(event, m.eventId, d);
+    for (const [pid, share] of eventShares(m, m.eventId == null ? undefined : byId.get(m.eventId))) {
+      add(person, pid, share);
+      add(event, m.eventId!, share);
+    }
+  }
+  return { person, event };
+}
+
+// Money they handed you vs. what was spent on their behalf ("te pasó X, gastaste Y").
+export function rendition<T extends Mv & Pick<Movement, 'relation'>>(movements: T[], shareOf: (m: T) => number) {
   let received = 0;
   let spent = 0;
   for (const m of movements) {
     if (m.relation === 'passed_to_spend' || m.relation === 'lent_to_me') received += m.amount;
-    if (m.relation === 'spent_theirs') spent += m.amount;
+    spent += shareOf(m);
   }
   return { received, spent };
 }
@@ -106,9 +137,10 @@ export function summarize({ month, accounts, people, events, categories, fixedEx
   const pendingTotal = payments.filter((p) => !p.paid).reduce((s, p) => s + p.amount, 0);
   const cardDebt = payments.filter((p) => p.kind === 'card' && !p.paid).reduce((s, p) => s + p.amount, 0);
 
-  const byPerson = balancesBy('personId', movements);
-  let owe = Math.max(0, -(byPerson.get(null) ?? 0)); // others' money with nobody assigned
-  let owed = 0;
+  const { person: byPerson, event: byEvent } = balances(movements, events);
+  const unassigned = byPerson.get(null) ?? 0; // others' money with nobody assigned
+  let owe = Math.max(0, -unassigned);
+  let owed = Math.max(0, unassigned);
   for (const p of people) {
     const b = byPerson.get(p.id) ?? 0;
     if (b < 0) owe -= b;
@@ -120,13 +152,13 @@ export function summarize({ month, accounts, people, events, categories, fixedEx
   // An overdrawn account would push the others past 100%, so shares are over positive balances.
   const positive = money.reduce((s, a) => s + Math.max(0, bal.get(a.id)!), 0);
 
+  const eventById = new Map(events.map((e) => [e.id, e]));
   const ownSpend = (categoryId: number) =>
     inMonth
       .filter((m) => m.type === 'expense' && !m.isOthers && m.categoryId === categoryId)
-      .reduce((s, m) => s + m.amount, 0);
+      .reduce((s, m) => s + myShare(m, m.eventId == null ? undefined : eventById.get(m.eventId)), 0);
   const budgets = categories.map((c) => ({ id: c.id, name: c.name, limit: c.monthlyLimit, spent: ownSpend(c.id) }));
 
-  const byEvent = balancesBy('eventId', movements);
   const openOwing = events.filter((e) => !e.closed && (byEvent.get(e.id) ?? 0) < 0);
 
   return {
@@ -166,6 +198,10 @@ export class Ledger {
     @InjectRepository(Movement) private movements: Repository<Movement>,
   ) {}
 
+  allEvents() {
+    return this.events.find({ relations: { people: true }, order: { createdAt: 'DESC' } });
+  }
+
   allMovements() {
     return this.movements.find({ order: { date: 'DESC', id: 'DESC' } });
   }
@@ -174,7 +210,7 @@ export class Ledger {
     const [accounts, people, events, categories, fixedExpenses, movements] = await Promise.all([
       this.accounts.find({ order: { id: 'ASC' } }),
       this.people.find(),
-      this.events.find(),
+      this.allEvents(),
       this.categories.find({ order: { id: 'ASC' } }),
       this.fixedExpenses.find({ order: { dayOfMonth: 'ASC' } }),
       this.allMovements(),

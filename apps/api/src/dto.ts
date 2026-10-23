@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -39,7 +40,8 @@ export class UpdatePersonDto extends PartialType(CreatePersonDto) {}
 
 export class CreateEventDto {
   @IsString() @IsNotEmpty() @MaxLength(80) name: string;
-  @IsOptional() @IsInt() personId?: number | null;
+  @IsOptional() @IsArray() @IsInt({ each: true }) personIds?: number[];
+  @IsOptional() @IsBoolean() includeMe?: boolean;
   @IsOptional() @IsBoolean() closed?: boolean;
 }
 export class UpdateEventDto extends PartialType(CreateEventDto) {}
@@ -72,7 +74,7 @@ export class CreateMovementDto {
   @IsOptional() @IsString() @MaxLength(60) newPersonName?: string;
   @IsOptional() @IsIn(RELATIONS) relation?: Relation | null;
   @IsOptional() @IsInt() eventId?: number | null;
-  // Free text from the form: matched against open events or created.
+  // Free text from the form: matched against open events or created. An income's person joins the event.
   @IsOptional() @IsString() @MaxLength(80) eventName?: string;
   @IsOptional() @IsInt() fixedExpenseId?: number | null;
 }

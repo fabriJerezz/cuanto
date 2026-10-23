@@ -26,7 +26,7 @@ import {
   defined,
 } from './dto.js';
 import { Account, Category, Event, FixedExpense, Movement, Person } from './entities.js';
-import { Ledger, accountBalances, balancesBy, monthOf, rendition } from './ledger.js';
+import { Ledger, accountBalances, balances, eventShares, monthOf, myShare, rendition } from './ledger.js';
 import { WITH } from './movements.controller.js';
 
 const currentMonth = () => {
@@ -97,7 +97,6 @@ export class AccountsController {
 export class PeopleController {
   constructor(
     @InjectRepository(Person) private repo: Repository<Person>,
-    @InjectRepository(Event) private events: Repository<Event>,
     @InjectRepository(Movement) private movements: Repository<Movement>,
     private ledger: Ledger,
   ) {}
@@ -106,13 +105,14 @@ export class PeopleController {
   async list() {
     const [people, events, movements] = await Promise.all([
       this.repo.find({ order: { name: 'ASC' } }),
-      this.events.find({ order: { createdAt: 'DESC' } }),
+      this.ledger.allEvents(),
       this.ledger.allMovements(),
     ]);
-    const bal = balancesBy('personId', movements);
+    const bal = balances(movements, events).person;
     return people.map((p) => {
-      const last = movements.find((m) => m.personId === p.id);
-      const event = events.find((e) => e.personId === p.id && !e.closed);
+      const mine = events.filter((e) => e.people.some((x) => x.id === p.id));
+      const last = movements.find((m) => m.personId === p.id || mine.some((e) => e.id === m.eventId));
+      const event = mine.find((e) => !e.closed);
       return { ...p, balance: bal.get(p.id) ?? 0, lastMovementDate: last?.date ?? null, eventName: event?.name ?? null };
     });
   }
@@ -120,12 +120,23 @@ export class PeopleController {
   @Get(':id')
   async get(@Param('id', ParseIntPipe) id: number) {
     const person = await found(this.repo.findOneBy({ id }));
-    const [movements, events] = await Promise.all([
-      this.movements.find({ where: { personId: id }, relations: WITH, order: { date: 'DESC', id: 'DESC' } }),
-      this.events.find({ where: { personId: id }, order: { createdAt: 'DESC' } }),
+    const [events, all] = await Promise.all([
+      this.ledger.allEvents(),
+      this.movements.find({ relations: WITH, order: { date: 'DESC', id: 'DESC' } }),
     ]);
-    const balance = balancesBy('personId', movements).get(id) ?? 0;
-    return { ...person, balance, ...rendition(movements), events, movements };
+    const byId = new Map(events.map((e) => [e.id, e]));
+    const shareOf = (m: Movement) => (m.eventId == null ? 0 : (eventShares(m, byId.get(m.eventId)).get(id) ?? 0));
+    const movements = all
+      .filter((m) => m.personId === id || shareOf(m) > 0)
+      .map((m) => ({ ...m, share: m.personId === id ? null : shareOf(m) }));
+    const { event: byEvent, person: byPerson } = balances(all, events);
+    return {
+      ...person,
+      balance: byPerson.get(id) ?? 0,
+      ...rendition(movements, shareOf),
+      events: events.filter((e) => e.people.some((p) => p.id === id)).map((e) => ({ ...e, balance: byEvent.get(e.id) ?? 0 })),
+      movements,
+    };
   }
 
   @Post()
@@ -154,35 +165,47 @@ export class EventsController {
 
   @Get()
   async list() {
-    const [events, movements] = await Promise.all([
-      this.repo.find({ relations: { person: true }, order: { createdAt: 'DESC' } }),
-      this.ledger.allMovements(),
-    ]);
-    const bal = balancesBy('eventId', movements);
+    const [events, movements] = await Promise.all([this.ledger.allEvents(), this.ledger.allMovements()]);
+    const bal = balances(movements, events).event;
     return events.map((e) => ({ ...e, balance: bal.get(e.id) ?? 0 }));
   }
 
   @Get(':id')
   async get(@Param('id', ParseIntPipe) id: number) {
-    const event = await found(this.repo.findOne({ where: { id }, relations: { person: true } }));
+    const event = await found(this.repo.findOne({ where: { id }, relations: { people: true } }));
     const movements = await this.movements.find({ where: { eventId: id }, relations: WITH, order: { date: 'DESC', id: 'DESC' } });
-    const balance = balancesBy('eventId', movements).get(id) ?? 0;
-    return { ...event, balance, ...rendition(movements), movements };
+    const { person, event: byEvent } = balances(movements, [event]);
+    const shareOf = (m: Movement) => [...eventShares(m, event).values()].reduce((s, n) => s + n, 0);
+    return {
+      ...event,
+      // Each person's balance within this event only.
+      people: event.people.map((p) => ({ ...p, balance: person.get(p.id) ?? 0 })),
+      balance: byEvent.get(id) ?? 0,
+      ...rendition(movements, shareOf),
+      movements: movements.map((m) => ({ ...m, myShare: m.type === 'expense' && !m.isOthers ? myShare(m, event) : null })),
+    };
   }
 
   @Post()
   create(@Body() dto: CreateEventDto) {
-    return this.repo.save(this.repo.create(dto));
+    return this.repo.save(this.withPeople(this.repo.create(), dto));
   }
 
   @Patch(':id')
   async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateEventDto) {
-    return this.repo.save(Object.assign(await found(this.repo.findOneBy({ id })), defined(dto)));
+    return this.repo.save(this.withPeople(await found(this.repo.findOne({ where: { id }, relations: { people: true } })), dto));
   }
 
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return removed(this.repo.delete(id));
+  }
+
+  private withPeople(e: Event, { personIds, ...dto }: UpdateEventDto) {
+    Object.assign(e, defined(dto));
+    if (personIds) e.people = personIds.map((id) => ({ id }) as Person);
+    e.people ??= [];
+    return e;
   }
 }
 
@@ -191,6 +214,7 @@ export class CategoriesController {
   constructor(
     @InjectRepository(Category) private repo: Repository<Category>,
     @InjectRepository(Movement) private movements: Repository<Movement>,
+    private ledger: Ledger,
   ) {}
 
   @Get()
@@ -206,8 +230,12 @@ export class CategoriesController {
       relations: WITH,
       order: { date: 'DESC', id: 'DESC' },
     });
-    const movements = all.filter((m) => monthOf(m.date) === month);
-    return { ...category, month, spent: movements.reduce((s, m) => s + m.amount, 0), movements };
+    const events = new Map((await this.ledger.allEvents()).map((e) => [e.id, e]));
+    // A shared event expense only counts your part.
+    const movements = all
+      .filter((m) => monthOf(m.date) === month)
+      .map((m) => ({ ...m, myShare: m.eventId == null ? m.amount : myShare(m, events.get(m.eventId)) }));
+    return { ...category, month, spent: movements.reduce((s, m) => s + m.myShare, 0), movements };
   }
 
   @Post()

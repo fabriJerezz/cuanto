@@ -1,116 +1,98 @@
-import { Plus } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { BackTitle, Bar, Caption, Chip, ErrorText, Glass, Loading, Muted, PageTitle, Tab } from '@/components/kit'
+import { BackTitle, Bar, Caption, ErrorText, Glass, Label, Loading, Muted, Tab } from '@/components/kit'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { api, useApi, useSave, type Account, type EventDetail, type PersonDetail, type PersonRow } from '@/lib/api'
-import { RELATION_LABEL, amountColor, balanceDir, dayMonth, daysAgo, initials, localDateTime, money, signed, signedMoney } from '@/lib/format'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { api, useApi, useSave, type Account, type EventDetail, type Person, type PersonDetail, type PersonRow } from '@/lib/api'
+import { balanceDir, daysAgo, initials, listNames, localDateTime, money, signed } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useMovementForm } from './movement-form'
 import { MovementRows } from './movements'
 
-function NewPerson({ onDone }: { onDone: () => void }) {
-  const [name, setName] = useState('')
-  const [kind, setKind] = useState<'person' | 'group'>('person')
-  const save = useSave(() => api.post('/people', { name, kind }))
+function Avatar({ name }: { name: string }) {
   return (
-    <Glass className="flex flex-col gap-3.5 p-[22px]">
-      <div>
-        <label htmlFor="p-nombre" className="mb-2 block text-[13px] font-semibold text-muted-foreground">
-          Nombre
-        </label>
-        <Input id="p-nombre" autoFocus placeholder="Ej: Fede" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div className="flex gap-2">
-        <Chip active={kind === 'person'} onClick={() => setKind('person')}>
-          Persona
-        </Chip>
-        <Chip active={kind === 'group'} onClick={() => setKind('group')}>
-          Grupo
-        </Chip>
-      </div>
-      <ErrorText error={save.error} />
-      <Button disabled={!name.trim() || save.isPending} onClick={() => save.mutate(undefined, { onSuccess: onDone })}>
-        Guardar
-      </Button>
-    </Glass>
+    <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand/12 text-sm font-bold text-brand-dark">{initials(name)}</div>
   )
 }
 
-function PeopleList({ selected }: { selected?: number }) {
-  const { data: s } = useApi<{ owe: number; owed: number }>('/summary')
-  const { data: people } = useApi<PersonRow[]>('/people')
-  const [adding, setAdding] = useState(false)
-  if (!people) return <Loading />
-
-  const open = people.filter((p) => p.balance !== 0).sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
-  const even = people.filter((p) => p.balance === 0).map((p) => p.name)
-
-  return (
-    <div className="flex flex-col gap-4">
-      <PageTitle
-        action={
-          <button
-            type="button"
-            aria-label="Agregar persona o grupo"
-            aria-expanded={adding}
-            onClick={() => setAdding(!adding)}
-            className="glass flex size-11 cursor-pointer items-center justify-center rounded-full shadow-none"
-          >
-            <Plus className="size-[22px]" strokeWidth={1.75} />
-          </button>
-        }
-      >
-        Personas
-      </PageTitle>
-      {adding && <NewPerson onDone={() => setAdding(false)} />}
-      {s && (
-        <div className="px-1 text-sm text-muted-foreground">
-          Debés <b className="num text-owe">{money(s.owe)}</b> · Te deben <b className="num text-brand">{money(s.owed)}</b>
-        </div>
-      )}
-      {open.length > 0 && (
-        <Glass className="overflow-hidden px-[22px] py-1 lg:px-6">
-          {open.map((p) => {
-            const ago = p.lastMovementDate ? daysAgo(p.lastMovementDate) : 0
-            const sub = [p.eventName, ago >= 7 && `hace ${ago} días`].filter(Boolean).join(' · ')
-            return (
-              <Link
-                key={p.id}
-                to={`/personas/${p.id}`}
-                className={cn(
-                  'flex min-h-[72px] items-center gap-3.5 border-line lg:min-h-[76px] [&+&]:border-t',
-                  selected === p.id && 'lg:-mx-6 lg:bg-brand/7 lg:px-6',
-                )}
-              >
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand/12 text-sm font-bold text-brand-dark">
-                  {initials(p.name)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-semibold">{p.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">{sub}</div>
-                </div>
-                <div className="text-right">
-                  <div className={cn('num text-[15px] font-bold', p.balance < 0 ? 'text-owe' : 'text-brand')}>{money(p.balance)}</div>
-                  <div className="text-xs text-muted-foreground">{balanceDir(p.balance, p)}</div>
-                </div>
-              </Link>
-            )
-          })}
-        </Glass>
-      )}
-      {even.length > 0 && (
-        <div className="text-center text-[13px] text-muted-foreground">
-          {even.length === 1 ? `${even[0]} está a mano` : `${even.slice(0, -1).join(', ')} y ${even.at(-1)} están a mano`}
-        </div>
-      )}
-      {people.length === 0 && !adding && <Muted className="text-center">Todavía no tenés plata en común con nadie.</Muted>}
+function BalanceLine({ p, sub, to, action }: { p: Person & { balance: number }; sub?: string; to?: string; action?: React.ReactNode }) {
+  const body = (
+    <>
+      <Avatar name={p.name} />
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-semibold">{p.name}</div>
+        {sub && <div className="truncate text-xs text-muted-foreground">{sub}</div>}
+      </div>
+      <div className="text-right">
+        <div className={cn('num text-[15px] font-bold', p.balance < 0 ? 'text-owe' : p.balance > 0 ? 'text-brand' : 'text-muted-foreground')}>{money(p.balance)}</div>
+        <div className="text-xs text-muted-foreground">{balanceDir(p.balance, p)}</div>
+      </div>
+    </>
+  )
+  const cls = 'flex min-h-[68px] items-center gap-3.5 border-line [&+&]:border-t'
+  return to ? (
+    <Link to={to} className={cls}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cls}>
+      {body}
+      {action}
     </div>
   )
 }
 
+// Inicio: what you owe and are owed, unfolding into the people involved.
+export function PeopleSummary({ owe, owed, className }: { owe: number; owed: number; className?: string }) {
+  const [open, setOpen] = useState(false)
+  const { data: people } = useApi<PersonRow[]>(open ? '/people' : null)
+  const involved = people?.filter((p) => p.balance !== 0).sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
+  const even = people?.filter((p) => p.balance === 0).map((p) => p.name) ?? []
+
+  return (
+    <Glass className={cn('px-[22px] py-4 lg:rounded-[36px] lg:px-7 lg:py-6', className)}>
+      <div className="flex flex-col gap-2 text-sm font-semibold">
+        <div className="flex items-baseline justify-between">
+          <span>Debés</span>
+          <b className="num text-xl text-owe lg:text-2xl">{money(owe)}</b>
+        </div>
+        <div className="flex items-baseline justify-between">
+          <span>Te deben</span>
+          <b className="num text-xl text-brand lg:text-2xl">{money(owed)}</b>
+        </div>
+      </div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="mt-3 h-10 w-full cursor-pointer rounded-full border border-white/90 bg-white/52 text-sm font-semibold"
+      >
+        {open ? 'Ocultar personas' : 'Ver personas'}
+      </button>
+      {open && (
+        <div className="mt-2">
+          {!people && <Loading />}
+          {involved?.map((p) => {
+            const ago = p.lastMovementDate ? daysAgo(p.lastMovementDate) : 0
+            return <BalanceLine key={p.id} p={p} to={`/personas/${p.id}`} sub={[p.eventName, ago >= 7 && `hace ${ago} días`].filter(Boolean).join(' · ')} />
+          })}
+          {involved?.length === 0 && <Muted className="py-3 text-center">No le debés a nadie ni te deben.</Muted>}
+          {even.length > 0 && (
+            <div className="pt-2 text-center text-[13px] text-muted-foreground">
+              {listNames(even)} {even.length === 1 ? 'está' : 'están'} a mano
+            </div>
+          )}
+        </div>
+      )}
+    </Glass>
+  )
+}
+
 // Shared by people and events: balance card with "te pasó X, gastaste Y".
-export function BalanceCard({ balance, received, spent, group, context }: { balance: number; received: number; spent: number; group: boolean; context?: string }) {
+function BalanceCard({ balance, received, spent, group, context }: { balance: number; received: number; spent: number; group: boolean; context?: string }) {
   const title = balance < 0 ? (group ? 'Les debés' : 'Le debés') : balance > 0 ? (group ? 'Te deben' : 'Te debe') : 'Están a mano'
   const pct = received ? Math.round((spent / received) * 100) : 0
   return (
@@ -122,7 +104,7 @@ export function BalanceCard({ balance, received, spent, group, context }: { bala
       {received > 0 && (
         <>
           <Muted>
-            {[context, `te ${group ? 'pasaron' : 'pasó'} ${money(received)}, gastaste ${money(spent)}`].filter(Boolean).join(' · ')}
+            {[context, `te ${group ? 'pasaron' : 'pasó'} ${money(received)}, se gastó ${money(spent)}`].filter(Boolean).join(' · ')}
           </Muted>
           <Bar className="mt-4" pct={pct} label={`${pct}% rendido`} />
         </>
@@ -131,77 +113,53 @@ export function BalanceCard({ balance, received, spent, group, context }: { bala
   )
 }
 
-function PersonPanel({ id }: { id: number }) {
+export function PersonPage() {
+  const { id } = useParams()
+  const openForm = useMovementForm()
   const { data: p } = useApi<PersonDetail>(`/people/${id}`)
   if (!p) return <Loading />
   const group = p.kind === 'group'
   const openEvent = p.events.find((e) => !e.closed)
   return (
-    <div className="flex flex-col gap-4">
-      <BackTitle to="/personas" label="Personas">
+    <>
+      <BackTitle to="/" label="Inicio">
         {p.name}
       </BackTitle>
-      <div className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{p.name}</div>
-      <BalanceCard balance={p.balance} received={p.received} spent={p.spent} group={group} context={openEvent?.name} />
-      <div className="flex gap-2.5">
-        <Link to={`/personas/${p.id}/saldar`} className={cn(buttonVariants(), 'flex-1')}>
-          {p.balance > 0 ? (group ? 'Me devolvieron' : 'Me devolvió') : group ? 'Les devolví' : 'Le devolví'}
-        </Link>
-        <Link to={`/movimientos/nuevo?personId=${p.id}&back=/personas/${p.id}`} className={cn(buttonVariants({ variant: 'glass' }), 'flex-1')}>
-          Nuevo movimiento
-        </Link>
-      </div>
-      {p.events.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {p.events.map((e) => (
-            <Link
-              key={e.id}
-              to={`/eventos/${e.id}`}
-              className="inline-flex h-11 items-center rounded-full border border-white/90 bg-white/52 px-[18px] text-sm font-semibold"
-            >
-              {e.name}
-              {e.closed && ' · cerrado'}
+      <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{p.name}</h1>
+      <div className="flex flex-wrap items-start gap-7">
+        <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
+          <BalanceCard balance={p.balance} received={p.received} spent={p.spent} group={group} context={openEvent?.name} />
+          <div className="flex gap-2.5">
+            <Link to={`/personas/${p.id}/saldar`} className={cn(buttonVariants(), 'flex-1')}>
+              {p.balance > 0 ? (group ? 'Me devolvieron' : 'Me devolvió') : group ? 'Les devolví' : 'Le devolví'}
             </Link>
-          ))}
-        </div>
-      )}
-      <Glass className="px-[22px] py-1">
-        {p.movements.length === 0 && <div className="flex min-h-15 items-center text-sm text-muted-foreground">Sin movimientos.</div>}
-        {p.movements.map((m) => (
-          <Link key={m.id} to={`/movimientos/${m.id}`} className="flex min-h-15 items-center justify-between gap-3 border-line [&+&]:border-t">
-            <div className="min-w-0">
-              <div className="truncate text-[15px] font-semibold">{m.relation ? RELATION_LABEL[m.relation] : m.description}</div>
-              <div className="text-xs text-muted-foreground">
-                {[dayMonth(m.date), m.relation && m.description].filter(Boolean).join(' · ')}
+            <Button variant="glass" className="flex-1" onClick={() => openForm({ personId: p.id })}>
+              Nuevo movimiento
+            </Button>
+          </div>
+          {p.events.length > 0 && (
+            <div>
+              <Caption>Eventos</Caption>
+              <div className="flex flex-wrap gap-2">
+                {p.events.map((e) => (
+                  <Link
+                    key={e.id}
+                    to={`/eventos/${e.id}`}
+                    className="inline-flex h-11 items-center rounded-full border border-white/90 bg-white/52 px-[18px] text-sm font-semibold"
+                  >
+                    {e.name}
+                    {e.closed && ' · cerrado'}
+                  </Link>
+                ))}
               </div>
             </div>
-            <div className={cn('num text-[15px] font-bold', amountColor(m))}>{signedMoney(m)}</div>
-          </Link>
-        ))}
-      </Glass>
-    </div>
-  )
-}
-
-export default function People() {
-  const { id } = useParams()
-  const { data: people } = useApi<PersonRow[]>('/people')
-  // Desktop shows the first person with an open balance when none is picked.
-  const fallback = people?.filter((p) => p.balance !== 0).sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))[0]?.id
-  const selected = id ? Number(id) : undefined
-  const panel = selected ?? fallback
-
-  return (
-    <div className="flex flex-wrap items-start gap-7">
-      <div className={cn('min-w-0 flex-[3_1_420px]', selected && 'hidden lg:block')}>
-        <PeopleList selected={panel} />
-      </div>
-      {panel && (
-        <div className={cn('min-w-0 flex-[2_1_340px]', !selected && 'hidden lg:block')}>
-          <PersonPanel id={panel} />
+          )}
         </div>
-      )}
-    </div>
+        <Glass className="min-w-0 flex-[3_1_420px] px-[22px] py-1 lg:px-7">
+          <MovementRows movements={p.movements} empty="Sin movimientos." amountOf={(m) => m.share} />
+        </Glass>
+      </div>
+    </>
   )
 }
 
@@ -315,29 +273,85 @@ export function Settle() {
   )
 }
 
+const NEW = '__new'
+
+function AddParticipant({ event }: { event: EventDetail }) {
+  const { data: people } = useApi<Person[]>('/people')
+  const [pick, setPick] = useState('')
+  const [name, setName] = useState('')
+  const add = useSave(async () => {
+    const id = pick === NEW ? (await api.post<Person>('/people', { name: name.trim() })).id : Number(pick)
+    await api.patch(`/events/${event.id}`, { personIds: [...event.people.map((p) => p.id), id] })
+  })
+  const options = people?.filter((p) => !event.people.some((x) => x.id === p.id)) ?? []
+  const ready = pick === NEW ? !!name.trim() : !!pick
+
+  return (
+    <div className="flex flex-col gap-2.5 pt-3">
+      <Label htmlFor="sumar">Sumar persona</Label>
+      <div className="flex gap-2">
+        <Select value={pick} onValueChange={setPick}>
+          <SelectTrigger id="sumar" className="flex-1">
+            <SelectValue placeholder="Elegí una persona" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((p) => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
+            ))}
+            <SelectItem value={NEW}>+ Persona nueva…</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          size="icon"
+          className="size-[52px]"
+          aria-label="Sumar"
+          disabled={!ready || add.isPending}
+          onClick={() =>
+            add.mutate(undefined, {
+              onSuccess: () => {
+                setPick('')
+                setName('')
+              },
+            })
+          }
+        >
+          <Plus />
+        </Button>
+      </div>
+      {pick === NEW && <Input aria-label="Nombre de la persona nueva" placeholder="Ej: Fede" value={name} onChange={(e) => setName(e.target.value)} />}
+      <ErrorText error={add.error} />
+    </div>
+  )
+}
+
 export function EventPage() {
   const { id } = useParams()
+  const openForm = useMovementForm()
   const { data: e } = useApi<EventDetail>(`/events/${id}`)
-  const toggle = useSave((closed: boolean) => api.patch(`/events/${id}`, { closed }))
+  const update = useSave((body: object) => api.patch(`/events/${id}`, body))
   if (!e) return <Loading />
-  const group = e.person?.kind === 'group'
-  const back = e.personId ? `/personas/${e.personId}` : '/personas'
+
+  const many = e.people.length > 1 || e.people[0]?.kind === 'group'
   const pct = e.received ? Math.round((e.spent / e.received) * 100) : 0
-  const title = e.balance < 0 ? (group ? 'Les debés' : 'Le debés') : e.balance > 0 ? (group ? 'Te deben' : 'Te debe') : 'Quedó en cero'
+  const title = e.balance < 0 ? (many ? 'Les debés' : 'Le debés') : e.balance > 0 ? (many ? 'Te deben' : 'Te debe') : 'Quedó en cero'
+  const names = e.people.length ? listNames(e.people.map((p) => p.name)) : 'Sin personas'
+  const single = e.people.length === 1 ? e.people[0] : null
 
   return (
     <>
-      <BackTitle to={back} label={e.person?.name ?? 'Personas'}>
+      <BackTitle to="/configuracion?seccion=eventos" label="Eventos">
         {e.name}
       </BackTitle>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{e.name}</h1>
           <Muted>
-            {e.person?.name ?? 'Sin persona'} · {e.closed ? 'cerrado' : 'abierto'}
+            {names} · {e.closed ? 'cerrado' : 'abierto'}
           </Muted>
         </div>
-        <Button variant="glass" disabled={toggle.isPending} onClick={() => toggle.mutate(!e.closed)}>
+        <Button variant="glass" disabled={update.isPending} onClick={() => update.mutate({ closed: !e.closed })}>
           {e.closed ? 'Reabrir evento' : 'Cerrar evento'}
         </Button>
       </div>
@@ -345,7 +359,9 @@ export function EventPage() {
         <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-3.5">
           <Glass className="px-[26px] py-6 lg:rounded-[36px] lg:px-8 lg:py-7">
             <div className="text-sm font-semibold text-muted-foreground">{title}</div>
-            <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em]', e.balance < 0 && 'text-owe')}>{money(e.balance)}</div>
+            <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em]', e.balance < 0 ? 'text-owe' : e.balance > 0 ? 'text-brand' : '')}>
+              {money(e.balance)}
+            </div>
             {e.received > 0 && (
               <>
                 <Muted>
@@ -356,23 +372,47 @@ export function EventPage() {
             )}
           </Glass>
           <div className="flex flex-wrap gap-2.5">
-            {e.personId && e.balance < 0 && (
-              <Link to={`/personas/${e.personId}/saldar`} className={buttonVariants()}>
+            {!e.closed && (
+              <Button onClick={() => openForm({ type: 'expense', eventName: e.name })}>
+                <Plus /> Agregar gasto
+              </Button>
+            )}
+            {single && e.balance < 0 && (
+              <Link to={`/personas/${single.id}/saldar`} className={buttonVariants({ variant: 'glass' })}>
                 Devolver lo que sobra
               </Link>
             )}
-            {!e.closed && (
-              <Link
-                to={`/movimientos/nuevo?type=expense&relation=spent_theirs&event=${encodeURIComponent(e.name)}${e.personId ? `&personId=${e.personId}` : ''}&back=/eventos/${e.id}`}
-                className={buttonVariants({ variant: 'glass' })}
-              >
-                Agregar gasto
-              </Link>
-            )}
           </div>
+          <Glass className="px-[22px] py-2 lg:px-6">
+            <label className="flex min-h-14 cursor-pointer items-center gap-3 text-[15px] font-semibold">
+              <Checkbox checked={e.includeMe} disabled={update.isPending} onCheckedChange={(v) => update.mutate({ includeMe: v === true })} />
+              <span className="flex-1">Participo</span>
+              <span className="text-xs font-medium text-muted-foreground">{e.includeMe ? 'Pagás tu parte' : 'Todo es de ellos'}</span>
+            </label>
+            {e.people.map((p) => (
+              <BalanceLine
+                key={p.id}
+                p={p}
+                action={
+                  <button
+                    type="button"
+                    aria-label={`Sacar a ${p.name} del evento`}
+                    disabled={update.isPending}
+                    onClick={() => update.mutate({ personIds: e.people.filter((x) => x.id !== p.id).map((x) => x.id) })}
+                    className="flex size-11 shrink-0 cursor-pointer items-center justify-center text-muted-foreground"
+                  >
+                    <X className="size-[18px]" strokeWidth={1.75} />
+                  </button>
+                }
+              />
+            ))}
+            {!e.closed && <AddParticipant event={e} />}
+            <ErrorText error={update.error} />
+            <div className="h-2" />
+          </Glass>
         </div>
         <Glass className="min-w-0 flex-[3_1_420px] px-[22px] py-1 lg:px-7">
-          <MovementRows movements={e.movements} empty="Sin movimientos en este evento." />
+          <MovementRows movements={e.movements} empty="Sin movimientos en este evento." amountOf={(m) => (e.includeMe && e.people.length ? m.myShare : null)} />
         </Glass>
       </div>
     </>

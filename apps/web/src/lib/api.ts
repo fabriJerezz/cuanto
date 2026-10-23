@@ -1,9 +1,9 @@
-import { QueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { QueryCache, QueryClient, useMutation, useQuery } from '@tanstack/react-query'
 
 export type AccountType = 'cash' | 'bank' | 'wallet' | 'credit_card'
 export type MovementType = 'income' | 'expense' | 'transfer'
 export type IncomeRelation = 'passed_to_spend' | 'returned_to_me' | 'lent_to_me'
-export type ExpenseRelation = 'advanced' | 'spent_theirs' | 'returned'
+export type ExpenseRelation = 'advanced' | 'returned'
 export type Relation = IncomeRelation | ExpenseRelation
 
 export interface Account {
@@ -27,8 +27,8 @@ export interface PersonRow extends Person {
 export interface EventItem {
   id: number
   name: string
-  personId: number | null
-  person: Person | null
+  people: Person[]
+  includeMe: boolean
   closed: boolean
   balance: number
 }
@@ -69,11 +69,12 @@ export interface Rendition {
   balance: number
   received: number
   spent: number
-  movements: Movement[]
 }
-export type PersonDetail = Person & Rendition & { events: EventItem[] }
-export type EventDetail = EventItem & Rendition
-export type CategoryDetail = Category & { month: string; spent: number; movements: Movement[] }
+// share: this person's part of a shared event expense (null for their own movements).
+export type PersonDetail = Person & Rendition & { events: EventItem[]; movements: (Movement & { share: number | null })[] }
+export type EventDetail = Omit<EventItem, 'people'> &
+  Rendition & { people: (Person & { balance: number })[]; movements: (Movement & { myShare: number | null })[] }
+export type CategoryDetail = Category & { month: string; spent: number; movements: (Movement & { myShare: number })[] }
 
 export interface Payment {
   kind: 'fixed' | 'card'
@@ -102,7 +103,13 @@ export interface Summary {
   eventsWithOthers: { count: number; amount: number }
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -113,10 +120,11 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     const msg = Array.isArray(err.message) ? err.message.join('. ') : err.message
-    throw new ApiError(msg ?? `Error ${res.status}`)
+    throw new ApiError(msg ?? `Error ${res.status}`, res.status)
   }
   const text = await res.text()
-  return text ? JSON.parse(text) : (undefined as T)
+  // Empty bodies (204) resolve to null: TanStack Query rejects undefined data.
+  return text ? JSON.parse(text) : (null as T)
 }
 
 export const api = {
@@ -126,7 +134,15 @@ export const api = {
   del: (url: string) => request<void>('DELETE', url),
 }
 
-export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
+const unauthorized = (e: unknown) => e instanceof ApiError && e.status === 401
+
+export const queryClient: QueryClient = new QueryClient({
+  // A 401 anywhere (session expired, PIN changed) sends you back to the PIN screen.
+  queryCache: new QueryCache({
+    onError: (e, q) => unauthorized(e) && q.queryKey[0] !== '/auth/me' && queryClient.invalidateQueries({ queryKey: ['/auth/me'] }),
+  }),
+  defaultOptions: { queries: { staleTime: 10_000, retry: (n, e) => !unauthorized(e) && n < 2 } },
+})
 
 // The query key is the URL, so any page can read any endpoint without a hook per resource.
 export function useApi<T>(url: string | null) {

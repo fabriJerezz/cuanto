@@ -3,7 +3,10 @@ import {
   CreateDateColumn,
   Entity,
   JoinColumn,
+  JoinTable,
+  ManyToMany,
   ManyToOne,
+  PrimaryColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -18,7 +21,8 @@ export type MovementType = (typeof MOVEMENT_TYPES)[number];
 
 // How a movement with someone else's money relates to that person.
 export const INCOME_RELATIONS = ['passed_to_spend', 'returned_to_me', 'lent_to_me'] as const;
-export const EXPENSE_RELATIONS = ['advanced', 'spent_theirs', 'returned'] as const;
+// 'advanced': you lent or paid for them. 'returned': you paid them back (the "Saldar" flow).
+export const EXPENSE_RELATIONS = ['advanced', 'returned'] as const;
 export const RELATIONS = [...INCOME_RELATIONS, ...EXPENSE_RELATIONS] as const;
 export type Relation = (typeof RELATIONS)[number];
 
@@ -43,14 +47,16 @@ export class Person {
   @CreateDateColumn() createdAt: Date;
 }
 
+// Shared spending (a trip, a dinner). Its expenses are split equally among its people,
+// plus you when includeMe ("Participo").
 @Entity()
 export class Event {
   @PrimaryGeneratedColumn() id: number;
   @Column() name: string;
-  @Column({ type: 'integer', nullable: true }) personId: number | null;
-  @ManyToOne(() => Person, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'personId' })
-  person: Person | null;
+  @ManyToMany(() => Person)
+  @JoinTable()
+  people: Person[];
+  @Column({ default: true }) includeMe: boolean;
   @Column({ default: false }) closed: boolean;
   @CreateDateColumn() createdAt: Date;
 }
@@ -94,13 +100,13 @@ export class Movement {
   @JoinColumn({ name: 'toAccountId' })
   toAccount: Account | null;
 
-  // Own income/expense only.
+  // Own income/expense only. For a shared event expense only your part counts.
   @Column({ type: 'integer', nullable: true }) categoryId: number | null;
   @ManyToOne(() => Category, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'categoryId' })
   category: Category | null;
 
-  // "No es mío" / "Es plata de otra persona".
+  // Income: "Es plata de otra persona". Expense: "Le presto o pago por otra persona".
   @Column({ default: false }) isOthers: boolean;
 
   @Column({ type: 'integer', nullable: true }) personId: number | null;
@@ -124,4 +130,12 @@ export class Movement {
   @CreateDateColumn() createdAt: Date;
 }
 
-export const ENTITIES = [Account, Person, Event, Category, FixedExpense, Movement];
+@Entity()
+export class Session {
+  @PrimaryColumn() token: string;
+  // sha256 of the PIN that opened it.
+  @Column() pinHash: string;
+  @CreateDateColumn() createdAt: Date;
+}
+
+export const ENTITIES = [Account, Person, Event, Category, FixedExpense, Movement, Session];

@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Link, NavLink, useNavigate, useParams } from 'react-router'
+import { Link, NavLink, useParams } from 'react-router'
 import { BackTitle, Bar, Caption, ErrorText, Glass, Loading, Muted, PageTitle, Segmented, Tab, segmentClass } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api, useApi, useSave, type Account, type CategoryDetail, type Payment, type Summary } from '@/lib/api'
-import { currentMonth, localDateTime, money, moneyInput, monthName, parseMoney, shortDate, signed } from '@/lib/format'
+import { currentMonth, dueState, localDateTime, money, moneyInput, monthName, parseMoney, shortDate, signed } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { MovementRows } from './movements'
 
@@ -20,24 +20,70 @@ function Check({ done }: { done: boolean }) {
 
 const payUrl = (p: Payment) => `/pagos/${p.kind === 'card' ? 'tarjeta' : 'fijo'}/${p.id}`
 
-function PaymentsList({ s }: { s: Summary }) {
-  const navigate = useNavigate()
-  const toggle = useSave(async (p: Payment) => {
+// Ticking a fixed expense pays it with its own account; ticking the card statement pays the
+// whole debt from the bank (the payment screen lets you pick another account or amount).
+export function usePaymentToggle() {
+  const { data: accounts } = useApi<Account[]>('/accounts')
+  const save = useSave(async (p: Payment) => {
     if (p.paid) return p.movementId && api.del(`/movements/${p.movementId}`)
-    return api.post('/movements', {
-      type: 'expense',
-      amount: p.amount,
-      date: localDateTime(),
-      accountId: p.accountId,
-      fixedExpenseId: p.id,
-      description: p.name,
-    })
+    const base = { amount: p.amount, date: localDateTime(), description: p.name }
+    if (p.kind === 'fixed') return api.post('/movements', { ...base, type: 'expense', accountId: p.accountId, fixedExpenseId: p.id })
+    const money = accounts?.filter((a) => a.type !== 'credit_card') ?? []
+    const from = money.find((a) => a.type === 'bank') ?? money[0]
+    if (!from) throw new Error('Necesitás una cuenta para pagar la tarjeta')
+    return api.post('/movements', { ...base, type: 'transfer', accountId: from.id, toAccountId: p.id })
   })
+  return save
+}
+
+const TONE = {
+  overdue: { row: 'bg-owe/9', sub: 'font-bold text-owe-strong' },
+  soon: { row: 'bg-brand/7', sub: 'font-semibold text-brand-dark' },
+  later: { row: '', sub: 'text-muted-foreground' },
+}
+
+export function PaymentRow({ p, onToggle, busy }: { p: Payment; onToggle: () => void; busy: boolean }) {
+  if (p.paid)
+    return (
+      <div className="flex min-h-14 items-center gap-1 border-line [&+&]:border-t">
+        <button
+          type="button"
+          aria-label={`Marcar como pendiente: ${p.name}`}
+          disabled={p.kind === 'card' || busy}
+          onClick={onToggle}
+          className="flex size-12 shrink-0 cursor-pointer items-center justify-center text-brand disabled:cursor-default"
+        >
+          <Check done />
+        </button>
+        <div className="min-w-0 flex-1 text-[15px] font-semibold text-muted-foreground">{p.name}</div>
+        <div className="num text-[15px] font-semibold text-muted-foreground">{money(p.amount)}</div>
+      </div>
+    )
+  const due = dueState(p.dueDate)
+  return (
+    <div className={cn('-mx-1 my-0.5 flex min-h-16 items-center gap-1 rounded-[20px] px-1 lg:min-h-[68px]', TONE[due.tone].row)}>
+      <button
+        type="button"
+        aria-label={`Marcar como pagado: ${p.name}`}
+        disabled={busy}
+        onClick={onToggle}
+        className={cn('flex size-12 shrink-0 cursor-pointer items-center justify-center', due.tone === 'overdue' ? 'text-owe' : 'text-muted-foreground')}
+      >
+        <Check done={false} />
+      </button>
+      <Link to={payUrl(p)} className="min-w-0 flex-1">
+        <div className="text-[15px] font-semibold">{p.name}</div>
+        <div className={cn('text-xs', TONE[due.tone].sub)}>{due.label}</div>
+      </Link>
+      <div className="num pr-2 text-[15px] font-bold">{money(p.amount)}</div>
+    </div>
+  )
+}
+
+function PaymentsList({ s }: { s: Summary }) {
+  const toggle = usePaymentToggle()
   const pending = s.payments.filter((p) => !p.paid)
   const done = s.payments.filter((p) => p.paid)
-
-  // A card statement needs a source account, so its checkbox opens the payment screen.
-  const onToggle = (p: Payment) => (p.kind === 'card' ? !p.paid && navigate(payUrl(p)) : toggle.mutate(p))
 
   return (
     <div className="flex flex-col gap-4">
@@ -47,47 +93,20 @@ function PaymentsList({ s }: { s: Summary }) {
       </div>
       {s.payments.length === 0 && (
         <Muted className="px-1">
-          Cargá tus gastos fijos en <Link to="/configuracion" className="font-semibold text-brand">Configuración</Link> y aparecen acá cada mes.
+          Cargá tus gastos fijos en <Link to="/configuracion?seccion=fijos" className="font-semibold text-brand">Configuración</Link> y aparecen acá cada mes.
         </Muted>
       )}
       {pending.length > 0 && (
         <Glass className="py-1 pr-3.5 pl-2">
           {pending.map((p) => (
-            <div key={`${p.kind}${p.id}`} className="flex min-h-16 items-center gap-1 border-line lg:min-h-[68px] [&+&]:border-t">
-              <button
-                type="button"
-                aria-label={`Marcar como pagado: ${p.name}`}
-                disabled={toggle.isPending}
-                onClick={() => onToggle(p)}
-                className="flex size-12 cursor-pointer items-center justify-center text-muted-foreground"
-              >
-                <Check done={false} />
-              </button>
-              <Link to={payUrl(p)} className="min-w-0 flex-1">
-                <div className="text-[15px] font-semibold">{p.name}</div>
-                <div className="text-xs text-muted-foreground">Vence el {shortDate(p.dueDate)}</div>
-              </Link>
-              <div className="num text-[15px] font-bold">{money(p.amount)}</div>
-            </div>
+            <PaymentRow key={`${p.kind}${p.id}`} p={p} busy={toggle.isPending} onToggle={() => toggle.mutate(p)} />
           ))}
         </Glass>
       )}
       {done.length > 0 && (
         <Glass soft className="rounded-[28px] py-1 pr-3.5 pl-2">
           {done.map((p) => (
-            <div key={`${p.kind}${p.id}`} className="flex min-h-14 items-center gap-1 border-line [&+&]:border-t">
-              <button
-                type="button"
-                aria-label={`Marcar como pendiente: ${p.name}`}
-                disabled={p.kind === 'card' || toggle.isPending}
-                onClick={() => onToggle(p)}
-                className="flex size-12 cursor-pointer items-center justify-center text-brand disabled:cursor-default"
-              >
-                <Check done />
-              </button>
-              <div className="min-w-0 flex-1 text-[15px] font-semibold text-muted-foreground">{p.name}</div>
-              <div className="num text-[15px] font-semibold text-muted-foreground">{money(p.amount)}</div>
-            </div>
+            <PaymentRow key={`${p.kind}${p.id}`} p={p} busy={toggle.isPending} onToggle={() => toggle.mutate(p)} />
           ))}
         </Glass>
       )}
@@ -108,7 +127,7 @@ function Budgets({ s }: { s: Summary }) {
       </div>
       {s.budgets.length === 0 && (
         <Muted className="px-1">
-          Creá categorías con tope en <Link to="/configuracion" className="font-semibold text-brand">Configuración</Link>.
+          Creá categorías con tope en <Link to="/configuracion?seccion=cats" className="font-semibold text-brand">Configuración</Link>.
         </Muted>
       )}
       {s.budgets.length > 0 && (
@@ -131,7 +150,7 @@ function Budgets({ s }: { s: Summary }) {
         </Glass>
       )}
       {s.eventsWithOthers.count > 0 && (
-        <Link to="/personas" className="glass flex min-h-14 items-center justify-between rounded-[28px] px-[22px] text-sm font-semibold shadow-none">
+        <Link to="/configuracion?seccion=eventos" className="glass flex min-h-14 items-center justify-between rounded-[28px] px-[22px] text-sm font-semibold shadow-none">
           <span>
             {s.eventsWithOthers.count} {s.eventsWithOthers.count === 1 ? 'evento' : 'eventos'} con plata de otros
           </span>
@@ -310,7 +329,7 @@ export function CategoryPage() {
           )}
         </div>
         <Glass className="min-w-0 flex-[3_1_420px] px-[22px] py-1 lg:px-7">
-          <MovementRows movements={c.movements} empty="Sin gastos en esta categoría este mes." />
+          <MovementRows movements={c.movements} empty="Sin gastos en esta categoría este mes." amountOf={(m) => m.myShare} />
         </Glass>
       </div>
     </>

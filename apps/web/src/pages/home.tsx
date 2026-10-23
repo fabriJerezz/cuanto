@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Glass, Loading, Row } from '@/components/kit'
+import { ErrorText, Glass, Loading } from '@/components/kit'
 import { Icon } from '@/components/layout'
-import { buttonVariants } from '@/components/ui/button'
-import { useApi, type Movement, type Summary } from '@/lib/api'
-import { amountColor, currentMonth, dayMonth, longToday, money, movementSub, movementTitle, signedMoney } from '@/lib/format'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { useApi, type Summary } from '@/lib/api'
+import { currentMonth, longToday, money } from '@/lib/format'
+import { useMovementForm } from './movement-form'
+import { MovementsTable } from './movements'
+import { PaymentRow, usePaymentToggle } from './payments'
+import { PeopleSummary } from './people'
 
 const ACCOUNT_COLORS = ['#0B4F44', '#A9D2C8', '#4FA08F', '#7FB8AA', '#2F7D6D', '#D3E6E0']
 
@@ -37,11 +40,13 @@ function Composition({ title, rows, note }: { title: string; rows: { label: stri
 
 export default function Home() {
   const [open, setOpen] = useState(false)
+  const openForm = useMovementForm()
+  const toggle = usePaymentToggle()
   const { data: s } = useApi<Summary>(`/summary?month=${currentMonth()}`)
-  const { data: latest } = useApi<Movement[]>('/movements?limit=3')
   if (!s) return <Loading />
 
   const upcoming = s.payments.filter((p) => !p.paid)
+  const paidCount = s.payments.length - upcoming.length
   const accounts = s.accounts
     .filter((a) => a.type !== 'credit_card' && a.balance > 0)
     .sort((a, b) => b.balance - a.balance)
@@ -59,13 +64,13 @@ export default function Home() {
         <Link to="/configuracion" aria-label="Configuración" className="glass flex size-11 items-center justify-center rounded-full shadow-none lg:hidden">
           <Icon name="settings" size={22} />
         </Link>
-        <Link to="/movimientos" className={cn(buttonVariants({ size: 'sm' }), 'hidden h-12 px-6 font-bold shadow-[0_10px_24px_rgba(16,32,27,0.22)] lg:inline-flex')}>
+        <Button size="sm" className="hidden h-12 px-6 font-bold shadow-[0_10px_24px_rgba(16,32,27,0.22)] lg:inline-flex" onClick={() => openForm()}>
           <Icon name="plus" size={20} />
           Nuevo movimiento
-        </Link>
+        </Button>
       </div>
 
-      <div className="flex flex-wrap items-stretch gap-4 lg:gap-[22px]">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-[22px]">
         <div className="hero min-w-0 flex-[3_1_420px] rounded-[32px] px-[26px] pt-7 pb-[22px] lg:rounded-[36px] lg:px-10 lg:pt-9 lg:pb-[30px]">
           <div className="text-sm font-semibold text-brand-soft lg:text-[15px]">Plata libre real</div>
           <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em] lg:text-[64px] lg:leading-[76px]">
@@ -95,56 +100,31 @@ export default function Home() {
           </Glass>
         )}
 
-        <Glass className="min-w-0 flex-[2_1_320px] px-[22px] pt-[18px] pb-2 lg:rounded-[36px] lg:px-7 lg:pt-6 lg:pb-3">
-          <div className="flex items-center justify-between">
+        <Glass className="min-w-0 flex-[2_1_320px] py-[18px] pr-4 pl-2.5 lg:rounded-[36px] lg:py-6 lg:pr-5 lg:pl-4">
+          <div className="flex items-center justify-between pl-3">
             <div className="text-sm font-bold lg:text-[15px]">Próximos pagos</div>
             <Link to="/pagos" className="text-[13px] font-semibold text-brand">
               Ver todos
             </Link>
           </div>
-          {upcoming.length === 0 && <Row className="text-sm text-muted-foreground">No te queda nada por pagar este mes.</Row>}
-          {upcoming.slice(0, 3).map((p, i) => (
-            <Row key={`${p.kind}${p.id}`} className={cn('h-14 justify-between lg:h-16', i === 2 && 'hidden lg:flex')}>
-              <div>
-                <div className="text-[15px] font-semibold">{p.name}</div>
-                <div className="text-xs text-muted-foreground">{dayMonth(p.dueDate)}</div>
-              </div>
-              <div className="num text-[15px] font-bold">{money(p.amount)}</div>
-            </Row>
-          ))}
+          <div className="mt-1">
+            {upcoming.map((p) => (
+              <PaymentRow key={`${p.kind}${p.id}`} p={p} busy={toggle.isPending} onToggle={() => toggle.mutate(p)} />
+            ))}
+          </div>
+          {upcoming.length === 0 && <div className="flex min-h-14 items-center pl-3 text-sm text-muted-foreground">No te queda nada por pagar este mes.</div>}
+          {paidCount > 0 && (
+            <div className="pt-1 pl-3 text-xs text-muted-foreground">
+              {paidCount} {paidCount === 1 ? 'pagado' : 'pagados'} este mes
+            </div>
+          )}
+          <ErrorText error={toggle.error} />
         </Glass>
       </div>
 
       <div className="flex flex-wrap items-start gap-4 lg:gap-[22px]">
-        <Glass className="hidden min-w-0 flex-[3_1_420px] px-7 pt-6 pb-3 lg:block lg:rounded-[36px]">
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-bold">Últimos movimientos</div>
-            <Link to="/movimientos" className="text-[13px] font-semibold text-brand">
-              Ver todos
-            </Link>
-          </div>
-          {latest?.length === 0 && <Row className="text-sm text-muted-foreground">Todavía no cargaste movimientos.</Row>}
-          {latest?.map((m) => (
-            <Row key={m.id} className="h-16 justify-between">
-              <Link to={`/movimientos/${m.id}`} className="min-w-0">
-                <div className="text-[15px] font-semibold">{movementTitle(m)}</div>
-                <div className="text-xs text-muted-foreground">{movementSub(m)}</div>
-              </Link>
-              <div className={cn('num text-[15px] font-bold', amountColor(m))}>{signedMoney(m)}</div>
-            </Row>
-          ))}
-        </Glass>
-        <Link
-          to="/personas"
-          className="glass flex min-h-14 w-full items-center justify-between rounded-[28px] px-[22px] text-sm font-semibold lg:w-auto lg:flex-[2_1_320px] lg:flex-col lg:items-stretch lg:gap-4 lg:rounded-[36px] lg:px-7 lg:py-6"
-        >
-          <span className="lg:flex lg:items-baseline lg:justify-between">
-            Debés <b className="num text-owe lg:text-2xl">{money(s.owe)}</b>
-          </span>
-          <span className="lg:flex lg:items-baseline lg:justify-between">
-            Te deben <b className="num text-brand lg:text-2xl">{money(s.owed)}</b>
-          </span>
-        </Link>
+        <PeopleSummary owe={s.owe} owed={s.owed} className="w-full lg:order-last lg:w-auto lg:flex-[2_1_320px]" />
+        <MovementsTable className="w-full min-w-0 lg:w-auto lg:flex-[3_1_420px]" />
       </div>
     </>
   )

@@ -37,13 +37,15 @@ export class MovementsController {
     const rows = await this.repo.find({
       where: {
         ...(filter === 'mine' && { isOthers: false }),
-        ...(filter === 'others' && { isOthers: true }),
         ...(categoryId && { categoryId: Number(categoryId) }),
       },
       relations: WITH,
       order: { date: 'DESC', id: 'DESC' },
     });
-    const out = month ? rows.filter((m) => monthOf(m.date) === month) : rows;
+    // "De otros": someone else's money, or an expense shared through an event.
+    const out = rows.filter(
+      (m) => (!month || monthOf(m.date) === month) && (filter !== 'others' || m.isOthers || (m.type === 'expense' && m.eventId != null)),
+    );
     return limit ? out.slice(0, Number(limit)) : out;
   }
 
@@ -86,25 +88,37 @@ export class MovementsController {
       m.toAccountId = null;
     }
 
+    const named = async () => {
+      if (eventName !== undefined) m.eventId = eventName.trim() ? await this.eventId(eventName.trim(), m) : null;
+    };
     if (m.isOthers) {
       m.categoryId = null;
       const allowed: readonly string[] = m.type === 'income' ? INCOME_RELATIONS : EXPENSE_RELATIONS;
       if (m.relation && !allowed.includes(m.relation)) throw new BadRequestException('La relación no corresponde al tipo de movimiento');
+      m.relation ??= allowed[0] as Movement['relation'];
       if (newPersonName?.trim()) m.personId = (await this.people.save({ name: newPersonName.trim() })).id;
-      if (eventName !== undefined) m.eventId = eventName.trim() ? await this.eventId(eventName.trim(), m.personId) : null;
-      if (!m.personId) m.relation = null;
-      else m.relation ??= allowed[0] as Movement['relation'];
+      // Money handed to you can belong to an event; a loan you give cannot.
+      if (m.type === 'income') await named();
+      else m.eventId = null;
     } else if (m.type !== 'transfer') {
-      Object.assign(m, { personId: null, relation: null, eventId: null });
+      Object.assign(m, { personId: null, relation: null });
+      // Your own expense can be shared through an event; your own income cannot.
+      if (m.type === 'expense') await named();
+      else m.eventId = null;
     }
 
     const { id } = await this.repo.save(m);
     return this.get(id);
   }
 
-  private async eventId(name: string, personId: number | null) {
-    const open = await this.events.find({ where: { closed: false } });
-    const found = open.find((e) => e.name.toLowerCase() === name.toLowerCase());
-    return found ? found.id : (await this.events.save({ name, personId })).id;
+  // Finds an open event by name (case-insensitive) or creates it. A new event from money someone
+  // handed you is theirs to spend (you don't take part); one from your own expense includes you.
+  private async eventId(name: string, m: Movement) {
+    const open = await this.events.find({ where: { closed: false }, relations: { people: true } });
+    const event =
+      open.find((e) => e.name.toLowerCase() === name.toLowerCase()) ??
+      this.events.create({ name, includeMe: m.type === 'expense', people: [] });
+    if (m.personId && !event.people.some((p) => p.id === m.personId)) event.people.push({ id: m.personId } as Person);
+    return (await this.events.save(event)).id;
   }
 }
