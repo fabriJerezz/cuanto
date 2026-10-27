@@ -1,14 +1,15 @@
-import { Pencil } from 'lucide-react'
+import { Pencil, Repeat, PartyPopper, Tag, Users, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { Caption, Chip, ErrorText, Glass, Label, Loading, Muted, Tab } from '@/components/kit'
+import { Caption, Chip, ErrorText, Glass, Label, Loading, Muted, Presence, Tab } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { api, useApi, useSave, type Account, type Category, type EventItem, type FixedExpense, type Person } from '@/lib/api'
-import { ACCOUNT_LABEL, money, moneyInput, parseMoney, signed } from '@/lib/format'
+import { ACCOUNT_LABEL, money, moneyInput, monthName, parseMoney, signed } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Icon } from '@/components/layout'
+import { ShortNote } from '@/components/short-note'
 import { useLogout } from './login'
 
 type Values = Record<string, string>
@@ -73,8 +74,8 @@ const SECTIONS = [
     id: 'fijos',
     label: 'Gastos fijos',
     url: '/fixed-expenses',
-    note: 'Gastos que se repiten todos los meses. Aparecen solos como pendientes en Pagos.',
-    row: (f: FixedExpense) => ({ name: f.name, sub: `Día ${f.dayOfMonth} · ${f.account.name}`, amount: money(f.amount) }),
+    note: 'Se repiten todos los meses y aparecen solos como pendientes. Los de un solo mes se agregan con «Agregar pago de este mes».',
+    row: (f: FixedExpense) => ({ name: f.name, sub: `Día ${f.dayOfMonth} · ${f.account.name}${f.month ? ' · solo ' + monthName(f.month) : ''}`, amount: money(f.amount) }),
     fields: [
       { id: 'name', label: 'Nombre', placeholder: 'Ej: Gimnasio' },
       { id: 'amount', label: 'Monto', placeholder: '$ 0', money: true },
@@ -118,10 +119,27 @@ const SECTIONS = [
       sub: `${e.people.length ? e.people.map((p) => p.name).join(', ') : 'Sin personas'} · ${e.closed ? 'cerrado' : 'abierto'}`,
     }),
     link: (e: EventItem) => `/eventos/${e.id}`,
-    fields: [{ id: 'name', label: 'Nombre', placeholder: 'Ej: Cumple de Sofi' }],
+    fields: [
+      { id: 'name', label: 'Nombre', placeholder: 'Ej: Cumple de Sofi' },
+      { id: 'amount', label: 'Monto estimado (opcional)', placeholder: '$ 0', money: true },
+      { id: 'dayOfMonth', label: 'Día de pago (opcional)', placeholder: '1 a 31' },
+    ],
     // personIds travels as "1,4,7" so it fits the string form state.
-    values: (e?: EventItem) => ({ name: e?.name ?? '', personIds: e?.people.map((p) => p.id).join(',') ?? '', includeMe: String(e?.includeMe ?? true) }),
-    body: (v: Values) => ({ name: v.name, personIds: v.personIds ? v.personIds.split(',').map(Number) : [], includeMe: v.includeMe === 'true' }),
+    values: (e?: EventItem) => ({
+      name: e?.name ?? '',
+      personIds: e?.people.map((p) => p.id).join(',') ?? '',
+      includeMe: String(e?.includeMe ?? true),
+      amount: e?.payment ? moneyInput(String(e.payment.amount)) : '',
+      dayOfMonth: e?.payment ? String(e.payment.dayOfMonth) : '',
+      accountId: e?.payment ? String(e.payment.accountId) : '',
+    }),
+    // With an amount the event also becomes this month's payment (nothing is deducted until it's ticked).
+    body: (v: Values) => ({
+      name: v.name,
+      personIds: v.personIds ? v.personIds.split(',').map(Number) : [],
+      includeMe: v.includeMe === 'true',
+      ...(parseMoney(v.amount) > 0 && { amount: parseMoney(v.amount), accountId: Number(v.accountId), ...(v.dayOfMonth && { dayOfMonth: Number(v.dayOfMonth) }) }),
+    }),
   } satisfies Section<EventItem>,
   {
     id: 'cats',
@@ -140,10 +158,19 @@ const SECTIONS = [
 
 type AnySection = Section<{ id: number }>
 
+// Icon + tint per section, so each list has its own color.
+const LOOK = {
+  cuentas: { icon: Wallet, tint: 'bg-brand/12 text-brand-dark' },
+  fijos: { icon: Repeat, tint: 'bg-brand/12 text-brand-dark' },
+  personas: { icon: Users, tint: 'bg-[#8FA6BD]/25 text-[#3F5870]' },
+  eventos: { icon: PartyPopper, tint: 'bg-[#8FA6BD]/25 text-[#3F5870]' },
+  cats: { icon: Tag, tint: 'bg-[#F0C9A4]/55 text-[#8A5A1E]' },
+} as const
+
 function Editor({ section, item, onDone }: { section: AnySection; item?: { id: number }; onDone: () => void }) {
   const [v, setV] = useState<Values>(() => section.values(item))
   const set = (k: string, val: string) => setV((prev) => ({ ...prev, [k]: val }))
-  const { data: accounts } = useApi<Account[]>(section.id === 'fijos' ? '/accounts' : null)
+  const { data: accounts } = useApi<Account[]>(section.id === 'fijos' || section.id === 'eventos' ? '/accounts' : null)
   const { data: people } = useApi<Person[]>(section.id === 'eventos' ? '/people' : null)
   // Fixed expenses default to the first account until one is picked.
   const accountId = v.accountId || String(accounts?.[0]?.id ?? '')
@@ -181,7 +208,7 @@ function Editor({ section, item, onDone }: { section: AnySection; item?: { id: n
       )}
       {accounts && (
         <div>
-          <Caption>Se paga con</Caption>
+          <Caption>{section.id === 'eventos' ? 'Se paga con (si ponés monto)' : 'Se paga con'}</Caption>
           <div className="flex flex-wrap gap-2">
             {accounts.map((a) => (
               <Chip key={a.id} active={String(a.id) === accountId} onClick={() => set('accountId', String(a.id))}>
@@ -214,6 +241,7 @@ function Editor({ section, item, onDone }: { section: AnySection; item?: { id: n
           </label>
         </>
       )}
+      {!item && (section.id === 'fijos' || section.id === 'eventos') && <ShortNote accountId={Number(accountId) || undefined} amount={parseMoney(v.amount ?? '')} />}
       <ErrorText error={save.error ?? remove.error} />
       <div className="flex flex-wrap gap-2.5">
         <Button
@@ -232,14 +260,90 @@ function Editor({ section, item, onDone }: { section: AnySection; item?: { id: n
   )
 }
 
-export default function Settings() {
-  const logout = useLogout()
-  const [params] = useSearchParams()
-  const [sectionId, setSectionId] = useState(() => (SECTIONS.some((s) => s.id === params.get('seccion')) ? params.get('seccion')! : 'cuentas'))
+// List + editor for one section (used by Configuración and by Pagos).
+export function Manager({ sectionId }: { sectionId: string }) {
   const [editing, setEditing] = useState<number | 'new' | null>(null)
   const section = SECTIONS.find((s) => s.id === sectionId) as unknown as AnySection
   const { data: items } = useApi<{ id: number }[]>(section.url)
   const editItem = typeof editing === 'number' ? items?.find((i) => i.id === editing) : undefined
+
+  return (
+    <>
+      <Muted className="px-1">{section.note}</Muted>
+      <div className="flex flex-wrap items-start gap-7">
+        <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-3">
+          <Glass className="p-1.5">
+            {!items && <Loading />}
+            {items?.length === 0 && <div className="flex min-h-16 items-center px-4 text-sm text-muted-foreground">Todavía no hay nada acá.</div>}
+            {items?.map((it) => {
+              const r = section.row(it)
+              const look = LOOK[sectionId as keyof typeof LOOK]
+              const body = (
+                <>
+                  <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full', look.tint)}>
+                    <look.icon className="size-[18px]" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-semibold">{r.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{r.sub}</div>
+                  </div>
+                </>
+              )
+              return (
+                <div
+                  key={it.id}
+                  className={cn(
+                    'flex min-h-16 items-center gap-3 rounded-[22px] pr-2 pl-3 transition-colors duration-300 ease-apple hover:bg-white/45 lg:min-h-[68px] lg:rounded-[26px] [&+&]:mt-0.5',
+                    editing === it.id && 'bg-brand/10 hover:bg-brand/10',
+                  )}
+                >
+                  {section.link ? (
+                    <Link to={section.link(it)} className="flex min-w-0 flex-1 items-center gap-3">
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
+                  )}
+                  {r.amount && <div className="num text-[15px] font-bold text-brand-dark">{r.amount}</div>}
+                  <button
+                    type="button"
+                    aria-label={`Editar ${r.name}`}
+                    aria-pressed={editing === it.id}
+                    onClick={() => setEditing(editing === it.id ? null : it.id)}
+                    className={cn(
+                      'flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-brand/12 hover:text-brand-dark',
+                      editing === it.id && 'bg-brand/15 text-brand-dark',
+                    )}
+                  >
+                    <Pencil className="size-[18px]" strokeWidth={1.75} />
+                  </button>
+                </div>
+              )
+            })}
+          </Glass>
+          <Button
+            variant="ghost"
+            className="self-start border-brand/25 bg-brand/12 text-brand-dark hover:bg-brand/20"
+            aria-expanded={editing === 'new'}
+            onClick={() => setEditing(editing === 'new' ? null : 'new')}
+          >
+            {editing === 'new' ? 'Cancelar' : <><Icon name="plus" size={18} /> Agregar</>}
+          </Button>
+        </div>
+        <Presence open={editing !== null} className="min-w-0 flex-[2_1_340px]">
+          <Editor key={`${sectionId}-${editing}`} section={section} item={editItem} onDone={() => setEditing(null)} />
+        </Presence>
+      </div>
+    </>
+  )
+}
+
+const MAIN = SECTIONS.filter((s) => s.id === 'cuentas' || s.id === 'personas')
+
+export default function Settings() {
+  const logout = useLogout()
+  const [params] = useSearchParams()
+  const [sectionId, setSectionId] = useState(() => (MAIN.some((s) => s.id === params.get('seccion')) ? params.get('seccion')! : 'cuentas'))
 
   return (
     <>
@@ -255,14 +359,11 @@ export default function Settings() {
         </Button>
       </div>
       <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
-        {SECTIONS.map((s) => (
+        {MAIN.map((s) => (
           <Tab
             key={s.id}
             active={s.id === sectionId}
-            onClick={() => {
-              setSectionId(s.id)
-              setEditing(null)
-            }}
+            onClick={() => setSectionId(s.id)}
           >
             {s.short ? (
               <>
@@ -275,50 +376,7 @@ export default function Settings() {
           </Tab>
         ))}
       </div>
-      <Muted className="px-1">{section.note}</Muted>
-      <div className="flex flex-wrap items-start gap-7">
-        <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-4">
-          <Glass className="py-1 pr-2 pl-[22px]">
-            {!items && <Loading />}
-            {items?.length === 0 && <div className="flex min-h-16 items-center text-sm text-muted-foreground">Todavía no hay nada acá.</div>}
-            {items?.map((it) => {
-              const r = section.row(it)
-              return (
-                <div key={it.id} className={cn('flex min-h-16 items-center gap-1 border-line lg:min-h-[68px] [&+&]:border-t', editing === it.id && 'font-bold')}>
-                  {section.link ? (
-                    <Link to={section.link(it)} className="min-w-0 flex-1">
-                      <div className="text-[15px] font-semibold">{r.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">{r.sub}</div>
-                    </Link>
-                  ) : (
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[15px] font-semibold">{r.name}</div>
-                      <div className="text-xs text-muted-foreground">{r.sub}</div>
-                    </div>
-                  )}
-                  {r.amount && <div className="num text-[15px] font-bold">{r.amount}</div>}
-                  <button
-                    type="button"
-                    aria-label={`Editar ${r.name}`}
-                    onClick={() => setEditing(editing === it.id ? null : it.id)}
-                    className="flex size-11 cursor-pointer items-center justify-center text-muted-foreground"
-                  >
-                    <Pencil className="size-[18px]" strokeWidth={1.75} />
-                  </button>
-                </div>
-              )
-            })}
-          </Glass>
-          <Button variant="glass" className="self-start" aria-expanded={editing === 'new'} onClick={() => setEditing(editing === 'new' ? null : 'new')}>
-            {editing === 'new' ? 'Cancelar' : <><Icon name="plus" size={18} /> Agregar</>}
-          </Button>
-        </div>
-        {editing !== null && (
-          <div className="min-w-0 flex-[2_1_340px]">
-            <Editor key={`${sectionId}-${editing}`} section={section} item={editItem} onDone={() => setEditing(null)} />
-          </div>
-        )}
-      </div>
+      <Manager key={sectionId} sectionId={sectionId} />
     </>
   )
 }

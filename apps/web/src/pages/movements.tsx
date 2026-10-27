@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { BackTitle, Glass, Loading, Muted, Row, Segmented, segmentClass } from '@/components/kit'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { api, useApi, useSave, type Movement } from '@/lib/api'
 import { RELATION_LABEL, amountColor, dateGroup, dateTimeLabel, money, movementSub, movementTitle, signedMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -12,7 +14,7 @@ const FILTERS = [
   ['mine', 'Míos'],
   ['others', 'De otros'],
 ] as const
-const PAGE = 30
+const PAGE = 10
 
 // amountOf: show part of the movement instead (your share of a shared expense, someone's part).
 export function MovementRows<M extends Movement>({ movements, empty = 'No hay movimientos.', amountOf }: { movements: M[]; empty?: string; amountOf?: (m: M) => number | null }) {
@@ -39,6 +41,17 @@ export function MovementsTable({ className }: { className?: string }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number][0]>('all')
   const [shown, setShown] = useState(PAGE)
   const { data } = useApi<Movement[]>(`/movements${filter === 'all' ? '' : `?filter=${filter}`}`)
+  const openForm = useMovementForm()
+  const remove = useSave((id: number) => api.del(`/movements/${id}`))
+  // Infinite scroll: 10 more each time the end of the list comes into view.
+  const more = !!data && data.length > shown
+  const end = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!more) return
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setShown((n) => n + PAGE), { rootMargin: '200px' })
+    io.observe(end.current!)
+    return () => io.disconnect()
+  }, [more, shown])
 
   let last = ''
   return (
@@ -71,21 +84,29 @@ export function MovementsTable({ className }: { className?: string }) {
         return (
           <div key={m.id}>
             {showGroup && <div className="pt-4 pb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">{group}</div>}
-            <Link to={`/movimientos/${m.id}`} className={cn('flex min-h-15 items-center gap-3 lg:min-h-16', !showGroup && 'border-t border-line')}>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[15px] font-semibold">{movementTitle(m)}</div>
-                <div className="text-xs text-muted-foreground">{movementSub(m)}</div>
-              </div>
-              <div className={cn('num text-[15px] font-bold', amountColor(m))}>{signedMoney(m)}</div>
-            </Link>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <Link to={`/movimientos/${m.id}`} className={cn('flex min-h-15 items-center gap-3 lg:min-h-16', !showGroup && 'border-t border-line')}>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-semibold">{movementTitle(m)}</div>
+                    <div className="text-xs text-muted-foreground">{movementSub(m)}</div>
+                  </div>
+                  <div className={cn('num text-[15px] font-bold', amountColor(m))}>{signedMoney(m)}</div>
+                </Link>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onSelect={() => openForm({ initial: m })}>
+                  <Pencil /> Editar
+                </ContextMenuItem>
+                <ContextMenuItem destructive onSelect={() => remove.mutate(m.id)}>
+                  <Trash2 /> Eliminar
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </div>
         )
       })}
-      {data && data.length > shown && (
-        <Button variant="ghost" size="sm" className="my-2 w-full text-brand" onClick={() => setShown(shown + PAGE)}>
-          Ver más
-        </Button>
-      )}
+      {more && <div ref={end} className="h-10" aria-hidden="true" />}
     </Glass>
   )
 }
@@ -111,7 +132,7 @@ export function MovementDetail() {
       : [`Se devuelven ${amt} a ${acc}`, `Los ${amt} volvieron a ${acc}`]
   const fields = [
     ['Cuenta', shown.type === 'transfer' ? movementSub(shown) : shown.account.name],
-    ['Fecha', dateTimeLabel(shown.date)],
+    ['Fecha', dateTimeLabel(shown.date).split(',')[0]],
     ...(shown.isOthers || shown.type === 'transfer' ? [] : [['Categoría', shown.category?.name ?? 'Sin categoría']]),
     ...(shown.isOthers ? [['Persona', shown.person?.name ?? 'Sin asignar']] : []),
     ...(shown.type === 'transfer' ? [] : [['Evento', shown.event?.name ?? 'Sin evento']]),
@@ -141,6 +162,7 @@ export function MovementDetail() {
           </Glass>
         </div>
         <div className="flex min-w-0 flex-[2_1_300px] flex-col gap-3.5">
+          <div key={deleted ? 'd' : confirm ? 'c' : 'a'} className="animate-in duration-500 ease-apple fade-in-0 slide-in-from-bottom-2">
           {deleted ? (
             <Glass className="p-7">
               <div className="text-lg font-bold">Movimiento eliminado</div>
@@ -170,6 +192,7 @@ export function MovementDetail() {
               </Button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </>

@@ -22,6 +22,7 @@ export interface Person {
 export interface PersonRow extends Person {
   balance: number
   lastMovementDate: string | null
+  debts: { eventId: number; eventName: string; amount: number }[]
   eventName: string | null
 }
 export interface EventItem {
@@ -31,6 +32,8 @@ export interface EventItem {
   includeMe: boolean
   closed: boolean
   balance: number
+  // Planned payment for the month, if the event was created with an amount.
+  payment: { amount: number; accountId: number; dayOfMonth: number; month: string | null } | null
 }
 export interface Category {
   id: number
@@ -44,6 +47,7 @@ export interface FixedExpense {
   dayOfMonth: number
   accountId: number
   account: Account
+  month: string | null
 }
 export interface Movement {
   id: number
@@ -83,7 +87,9 @@ export interface Payment {
   amount: number
   dueDate: string
   accountId: number
+  eventId: number | null
   paid: boolean
+  skipped: boolean
   movementId: number | null
 }
 export interface Summary {
@@ -91,7 +97,7 @@ export interface Summary {
   free: number
   totalInAccounts: number
   cardDebt: number
-  accounts: { id: number; name: string; type: AccountType; balance: number; pct: number | null }[]
+  accounts: { id: number; name: string; type: AccountType; balance: number; pct: number | null; split: { free: number; pending: number; others: number } | null }[]
   owners: { free: number; pending: number; others: number; freePct: number; pendingPct: number; othersPct: number }
   payments: Payment[]
   pendingTotal: number
@@ -131,6 +137,7 @@ export const api = {
   get: <T>(url: string) => request<T>('GET', url),
   post: <T>(url: string, body: unknown) => request<T>('POST', url, body),
   patch: <T>(url: string, body: unknown) => request<T>('PATCH', url, body),
+  put: (url: string) => request<void>('PUT', url),
   del: (url: string) => request<void>('DELETE', url),
 }
 

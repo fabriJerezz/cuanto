@@ -9,7 +9,7 @@ import { MovementDetail } from '@/pages/movements'
 import { AuthGate } from '@/pages/login'
 import Onboarding from '@/pages/onboarding'
 import Payments, { CategoryPage, Pay } from '@/pages/payments'
-import { EventPage, PersonPage, Settle } from '@/pages/people'
+import { EventPage, PersonPage, ReceiveReturn, Settle } from '@/pages/people'
 import Settings from '@/pages/settings'
 import './index.css'
 
@@ -25,9 +25,12 @@ const router = createBrowserRouter([
           { path: '/movimientos/:id', element: <MovementDetail /> },
           { path: '/personas/:id', element: <PersonPage /> },
           { path: '/personas/:id/saldar', element: <Settle /> },
+          { path: '/saldar', element: <ReceiveReturn /> },
           { path: '/eventos/:id', element: <EventPage /> },
           { path: '/pagos', element: <Payments tab="pagos" /> },
           { path: '/pagos/presupuestos', element: <Payments tab="presupuestos" /> },
+          { path: '/pagos/eventos', element: <Payments tab="eventos" /> },
+          { path: '/pagos/categorias', element: <Payments tab="categorias" /> },
           { path: '/pagos/:kind/:id', element: <Pay /> },
           { path: '/categorias/:id', element: <CategoryPage /> },
           { path: '/configuracion', element: <Settings /> },

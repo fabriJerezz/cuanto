@@ -43,6 +43,10 @@ export class CreateEventDto {
   @IsOptional() @IsArray() @IsInt({ each: true }) personIds?: number[];
   @IsOptional() @IsBoolean() includeMe?: boolean;
   @IsOptional() @IsBoolean() closed?: boolean;
+  // Planned payment for the current month; ticking it in Pagos records the expense on the event.
+  @IsOptional() @IsInt() @Min(1) amount?: number;
+  @IsOptional() @IsInt() accountId?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(31) dayOfMonth?: number;
 }
 export class UpdateEventDto extends PartialType(CreateEventDto) {}
 
@@ -57,6 +61,8 @@ export class CreateFixedExpenseDto {
   @IsInt() @Min(1) amount: number;
   @IsInt() @Min(1) @Max(31) dayOfMonth: number;
   @IsInt() accountId: number;
+  // 'YYYY-MM': a payment for that month only, not repeated.
+  @IsOptional() @Matches(/^\d{4}-\d{2}$/) month?: string;
 }
 export class UpdateFixedExpenseDto extends PartialType(CreateFixedExpenseDto) {}
 

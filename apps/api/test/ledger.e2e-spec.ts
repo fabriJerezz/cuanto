@@ -85,11 +85,77 @@ describe('ledger', () => {
     expect(ev).toMatchObject({ includeMe: true, balance: 30000, people: [{ name: 'Nico', balance: 30000 }] });
     expect(ev.movements[0].myShare).toBe(30000);
 
+    // Nico pays his part of the asado back once; a second time is rejected.
+    const back = { type: 'income', date: d, accountId: cash.id, isOthers: true, personId: nico.id, relation: 'returned_to_me', eventId: asado.eventId };
+    await api().post('/api/movements').send({ ...back, amount: 40000 }).expect(400);
+    await post('/movements', { ...back, amount: 30000 });
+    await api().post('/api/movements').send({ ...back, amount: 1000 }).expect(400);
+
     // Paying the card statement is a transfer: debt goes down, free money stays.
     await post('/movements', { type: 'transfer', amount: 248400, date: '2026-10-22T12:00', accountId: bank.id, toAccountId: card.id });
     s = await summary();
     expect(s.payments.find((p: { kind: string }) => p.kind === 'card')).toMatchObject({ paid: true, amount: 248400 });
-    expect(s.free).toBe(163600);
+    expect(s.free).toBe(193600); // + the 30000 Nico paid back
+  });
+
+  it('leaves a fixed expense out of one month', async () => {
+    const before = await summary();
+    const internet = before.payments.find((p: { name: string }) => p.name === 'Internet');
+    await api().put(`/api/fixed-expenses/${internet.id}/skip/2026-10`).expect(200);
+    const after = await summary();
+    expect(after.payments.find((p: { name: string }) => p.name === 'Internet')).toMatchObject({ skipped: true });
+    expect(after.pendingTotal).toBe(before.pendingTotal - internet.amount);
+    await api().delete(`/api/fixed-expenses/${internet.id}/skip/2026-10`).expect(200);
+    expect((await summary()).pendingTotal).toBe(before.pendingTotal);
+  });
+
+  it('keeps one-off payments to their month and pays events from them', async () => {
+    const [bank] = (await api().get('/api/accounts').expect(200)).body;
+    const gift = await post('/fixed-expenses', { name: 'Regalo', amount: 5000, dayOfMonth: 10, accountId: bank.id, month: '2026-10' });
+    const names = async (month: string) =>
+      (await api().get(`/api/summary?month=${month}`).expect(200)).body.payments.map((p: { name: string }) => p.name);
+    expect(await names('2026-10')).toContain('Regalo');
+    expect(await names('2026-11')).not.toContain('Regalo');
+    await api().delete(`/api/fixed-expenses/${gift.id}`).expect(200);
+
+    // An event planned with an amount and account is a payment of the current month; nothing is deducted yet.
+    const before = await summary();
+    const ev = await post('/events', { name: 'Cumple', amount: 20000, accountId: bank.id });
+    const after = await api().get('/api/summary').expect(200);
+    const pay = after.body.payments.find((p: { eventId: number }) => p.eventId === ev.id);
+    expect(pay).toMatchObject({ name: 'Cumple', amount: 20000, paid: false });
+    expect(after.body.accounts.find((a: { id: number }) => a.id === bank.id).balance).toBe(before.accounts.find((a: { id: number }) => a.id === bank.id).balance);
+    expect((await api().get(`/api/events/${ev.id}`).expect(200)).body.payment).toMatchObject({ amount: 20000 });
+    await api().patch(`/api/events/${ev.id}`).send({ amount: 25000 }).expect(200);
+    expect((await api().get(`/api/events/${ev.id}`).expect(200)).body.payment.amount).toBe(25000);
+  });
+
+  it('shows what people owe for a planned event before it is paid', async () => {
+    const [bank] = (await api().get('/api/accounts').expect(200)).body;
+    const ana = await post('/people', { name: 'Ana' });
+    const ev = await post('/events', { name: 'Despedida', amount: 20000, accountId: bank.id, personIds: [ana.id], includeMe: true });
+    const owes = async () => (await api().get(`/api/events/${ev.id}`).expect(200)).body.people[0].balance;
+    expect(await owes()).toBe(10000);
+    expect((await api().get(`/api/people/${ana.id}`).expect(200)).body.balance).toBe(10000);
+
+    // Paying the planned payment swaps the virtual expense for the real one: no double counting.
+    const pay = (await summary()).payments.find((p: { eventId: number }) => p.eventId === ev.id);
+    await post('/movements', { type: 'expense', amount: 20000, date: '2026-10-22T12:00', accountId: bank.id, fixedExpenseId: pay.id, eventId: ev.id });
+    expect(await owes()).toBe(10000);
+    // She can pay her part back once.
+    const back = { type: 'income', amount: 10000, date: '2026-10-22T12:00', accountId: bank.id, isOthers: true, personId: ana.id, relation: 'returned_to_me', eventId: ev.id };
+    await post('/movements', back);
+    expect(await owes()).toBe(0);
+    await api().post('/api/movements').send(back).expect(400);
+  });
+
+  it('splits each account into free, pending and others', async () => {
+    const { accounts } = await summary();
+    for (const a of accounts.filter((a: { split: unknown }) => a.split)) {
+      const { free, pending, others } = a.split;
+      expect(free + pending + others).toBe(Math.max(0, a.balance));
+      expect(Math.min(pending, others)).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it('rejects inconsistent movements and deleting used accounts', async () => {

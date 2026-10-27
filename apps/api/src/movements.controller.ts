@@ -15,7 +15,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateMovementDto, UpdateMovementDto, defined } from './dto.js';
 import { EXPENSE_RELATIONS, Event, INCOME_RELATIONS, Movement, Person } from './entities.js';
-import { monthOf } from './ledger.js';
+import { Ledger, balances, monthOf } from './ledger.js';
 
 export const WITH = { account: true, toAccount: true, category: true, person: true, event: true } as const;
 
@@ -25,6 +25,7 @@ export class MovementsController {
     @InjectRepository(Movement) private repo: Repository<Movement>,
     @InjectRepository(Person) private people: Repository<Person>,
     @InjectRepository(Event) private events: Repository<Event>,
+    private ledger: Ledger,
   ) {}
 
   @Get()
@@ -107,6 +108,7 @@ export class MovementsController {
       else m.eventId = null;
     }
 
+    await this.checkReturn(m);
     const { id } = await this.repo.save(m);
     return this.get(id);
   }
@@ -120,5 +122,17 @@ export class MovementsController {
       this.events.create({ name, includeMe: m.type === 'expense', people: [] });
     if (m.personId && !event.people.some((p) => p.id === m.personId)) event.people.push({ id: m.personId } as Person);
     return (await this.events.save(event)).id;
+  }
+
+  // Someone paying back their part of an event can only do it once: the rest they still owe
+  // there (their balance in the event without this movement) is the ceiling.
+  private async checkReturn(m: Movement) {
+    if (!m.isOthers || m.type !== 'income' || m.relation !== 'returned_to_me' || m.eventId == null || m.personId == null) return;
+    const event = await this.events.findOne({ where: { id: m.eventId }, relations: { people: true } });
+    const others = (await this.repo.find({ where: { eventId: m.eventId } })).filter((x) => x.id !== m.id);
+    const planned = (await this.ledger.planned()).filter((x) => x.eventId === m.eventId);
+    const pending = balances([...others, ...planned], event ? [event] : []).person.get(m.personId) ?? 0;
+    if (pending <= 0) throw new BadRequestException('Esa persona ya devolvió su parte de este evento');
+    if (m.amount > pending) throw new BadRequestException(`Esa persona solo debe ${pending} en este evento`);
   }
 }

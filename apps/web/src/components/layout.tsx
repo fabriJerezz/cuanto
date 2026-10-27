@@ -1,4 +1,5 @@
-import { Navigate, NavLink, Outlet } from 'react-router'
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
+import { Toaster } from '@/components/toast'
 import { useApi, type Account } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { MovementFormProvider, useMovementForm } from '@/pages/movement-form'
@@ -43,13 +44,13 @@ export function Icon({ name, size = 24, className }: { name: keyof typeof paths;
 
 const NAV = [
   { to: '/', label: 'Inicio', icon: 'home' },
-  { to: '/pagos', label: 'Pagos', icon: 'payments' },
+  { to: '/pagos', label: 'Gastos', icon: 'payments' },
 ] as const
 
 function Sidebar() {
   const link = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'flex h-12 items-center gap-3 rounded-2xl px-3.5 text-sm',
+      'press flex h-12 items-center gap-3 rounded-2xl px-3.5 text-sm',
       isActive ? 'bg-brand/13 font-bold text-brand-dark' : 'font-semibold text-muted-foreground hover:bg-white/40',
     )
   return (
@@ -76,7 +77,7 @@ function Sidebar() {
 function TabBar() {
   const openForm = useMovementForm()
   const item = ({ isActive }: { isActive: boolean }) =>
-    cn('flex size-12 items-center justify-center rounded-full', isActive ? 'bg-brand/14 text-brand' : 'text-muted-foreground')
+    cn('press flex size-12 items-center justify-center rounded-full', isActive ? 'bg-brand/14 text-brand' : 'text-muted-foreground')
   const [home, payments] = NAV
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 px-5 pb-[max(16px,env(safe-area-inset-bottom))] lg:hidden">
@@ -105,16 +106,18 @@ function TabBar() {
 
 export function Shell() {
   const accounts = useApi<Account[]>('/accounts')
+  const { pathname } = useLocation() // keyed by section: switching tabs inside Pagos doesn't replay the page animation
   if (accounts.data?.length === 0) return <Navigate to="/bienvenida" replace />
 
   return (
     <MovementFormProvider>
       <div className="flex min-h-dvh">
         <Sidebar />
-        <main className="flex min-w-0 flex-1 flex-col gap-4 px-5 pt-6 pb-28 lg:gap-[22px] lg:px-11 lg:py-8">
+        <main key={pathname.split('/')[1]} className="page flex min-w-0 flex-1 flex-col gap-4 px-5 pt-6 pb-28 lg:gap-[22px] lg:px-11 lg:py-8">
           <Outlet />
         </main>
         <TabBar />
+        <Toaster />
       </div>
     </MovementFormProvider>
   )

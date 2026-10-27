@@ -1,12 +1,13 @@
-import { Plus, X } from 'lucide-react'
+import { HandCoins, Plus, X } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { BackTitle, Bar, Caption, ErrorText, Glass, Label, Loading, Muted, Tab } from '@/components/kit'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
+import { BackTitle, Caption, ErrorText, Glass, Label, Loading, Muted, Tab, Collapse, useShortcut } from '@/components/kit'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { api, useApi, useSave, type Account, type EventDetail, type Person, type PersonDetail, type PersonRow } from '@/lib/api'
+import { api, useApi, useSave, type Account, type EventDetail, type EventItem, type Person, type PersonDetail, type PersonRow } from '@/lib/api'
 import { balanceDir, daysAgo, initials, listNames, localDateTime, money, signed } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useMovementForm } from './movement-form'
@@ -18,7 +19,25 @@ function Avatar({ name }: { name: string }) {
   )
 }
 
-function BalanceLine({ p, sub, to, action }: { p: Person & { balance: number }; sub?: string; to?: string; action?: React.ReactNode }) {
+// debts: what they still owe per event; right-click on each one marks it paid back into the event.
+function BalanceLine({ p, sub, to, action, debts }: { p: Person & { balance: number }; sub?: string; to?: string; action?: React.ReactNode; debts?: PersonRow['debts'] }) {
+  const { data: accounts } = useApi<Account[]>('/accounts')
+  const payBack = useSave((d: PersonRow['debts'][number]) => {
+    const sources = accounts?.filter((a) => a.type !== 'credit_card') ?? []
+    const into = sources.find((a) => a.type === 'bank') ?? sources[0]
+    if (!into) throw new Error('Necesitás una cuenta para recibir la plata')
+    return api.post('/movements', {
+      type: 'income',
+      amount: d.amount,
+      date: localDateTime(),
+      accountId: into.id,
+      isOthers: true,
+      personId: p.id,
+      relation: 'returned_to_me',
+      eventId: d.eventId,
+      description: `${p.name} me devolvió`,
+    })
+  })
   const body = (
     <>
       <Avatar name={p.name} />
@@ -33,6 +52,27 @@ function BalanceLine({ p, sub, to, action }: { p: Person & { balance: number }; 
     </>
   )
   const cls = 'flex min-h-[68px] items-center gap-3.5 border-line [&+&]:border-t'
+  if (to && debts?.length)
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <Link to={to} className={cls}>
+            {body}
+          </Link>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {debts.map((d) => (
+            <ContextMenuItem key={d.eventId} disabled={!accounts} onSelect={() => payBack.mutate(d, { onError: (e) => alert(e.message) })}>
+              <HandCoins />
+              <span>
+                {p.kind === 'group' ? 'Me devolvieron' : 'Me devolvió'} {money(d.amount)}
+                <span className="block text-xs font-medium text-muted-foreground">{d.eventName}</span>
+              </span>
+            </ContextMenuItem>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
+    )
   return to ? (
     <Link to={to} className={cls}>
       {body}
@@ -48,9 +88,9 @@ function BalanceLine({ p, sub, to, action }: { p: Person & { balance: number }; 
 // Inicio: what you owe and are owed, unfolding into the people involved.
 export function PeopleSummary({ owe, owed, className }: { owe: number; owed: number; className?: string }) {
   const [open, setOpen] = useState(false)
+  useShortcut('d', () => setOpen((o) => !o))
   const { data: people } = useApi<PersonRow[]>(open ? '/people' : null)
   const involved = people?.filter((p) => p.balance !== 0).sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
-  const even = people?.filter((p) => p.balance === 0).map((p) => p.name) ?? []
 
   return (
     <Glass className={cn('px-[22px] py-4 lg:rounded-[36px] lg:px-7 lg:py-6', className)}>
@@ -72,43 +112,30 @@ export function PeopleSummary({ owe, owed, className }: { owe: number; owed: num
       >
         {open ? 'Ocultar personas' : 'Ver personas'}
       </button>
-      {open && (
+      <Collapse open={open}>
         <div className="mt-2">
           {!people && <Loading />}
           {involved?.map((p) => {
             const ago = p.lastMovementDate ? daysAgo(p.lastMovementDate) : 0
-            return <BalanceLine key={p.id} p={p} to={`/personas/${p.id}`} sub={[p.eventName, ago >= 7 && `hace ${ago} días`].filter(Boolean).join(' · ')} />
+            return <BalanceLine key={p.id} p={p} debts={p.debts} to={`/personas/${p.id}`} sub={[p.eventName, ago >= 7 && `hace ${ago} días`].filter(Boolean).join(' · ')} />
           })}
           {involved?.length === 0 && <Muted className="py-3 text-center">No le debés a nadie ni te deben.</Muted>}
-          {even.length > 0 && (
-            <div className="pt-2 text-center text-[13px] text-muted-foreground">
-              {listNames(even)} {even.length === 1 ? 'está' : 'están'} a mano
-            </div>
-          )}
         </div>
-      )}
+      </Collapse>
     </Glass>
   )
 }
 
 // Shared by people and events: balance card with "te pasó X, gastaste Y".
-function BalanceCard({ balance, received, spent, group, context }: { balance: number; received: number; spent: number; group: boolean; context?: string }) {
+function BalanceCard({ balance, group, context }: { balance: number; group: boolean; context?: string }) {
   const title = balance < 0 ? (group ? 'Les debés' : 'Le debés') : balance > 0 ? (group ? 'Te deben' : 'Te debe') : 'Están a mano'
-  const pct = received ? Math.round((spent / received) * 100) : 0
   return (
     <Glass className="px-[26px] py-6 lg:rounded-[36px] lg:px-8 lg:py-7">
       <div className="text-sm font-semibold text-muted-foreground">{title}</div>
       <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em]', balance < 0 ? 'text-owe' : balance > 0 ? 'text-brand' : '')}>
         {money(balance)}
       </div>
-      {received > 0 && (
-        <>
-          <Muted>
-            {[context, `te ${group ? 'pasaron' : 'pasó'} ${money(received)}, se gastó ${money(spent)}`].filter(Boolean).join(' · ')}
-          </Muted>
-          <Bar className="mt-4" pct={pct} label={`${pct}% rendido`} />
-        </>
-      )}
+      {context && balance !== 0 && <Muted>{context}</Muted>}
     </Glass>
   )
 }
@@ -128,9 +155,9 @@ export function PersonPage() {
       <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{p.name}</h1>
       <div className="flex flex-wrap items-start gap-7">
         <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
-          <BalanceCard balance={p.balance} received={p.received} spent={p.spent} group={group} context={openEvent?.name} />
+          <BalanceCard balance={p.balance} group={group} context={openEvent?.name} />
           <div className="flex gap-2.5">
-            <Link to={`/personas/${p.id}/saldar`} className={cn(buttonVariants(), 'flex-1')}>
+            <Link to={p.balance > 0 ? `/saldar?persona=${p.id}` : `/personas/${p.id}/saldar`} className={cn(buttonVariants(), 'flex-1')}>
               {p.balance > 0 ? (group ? 'Me devolvieron' : 'Me devolvió') : group ? 'Les devolví' : 'Le devolví'}
             </Link>
             <Button variant="glass" className="flex-1" onClick={() => openForm({ personId: p.id })}>
@@ -182,6 +209,8 @@ export function Settle() {
 
   const group = p.kind === 'group'
   const d = dir ?? (p.balance > 0 ? 'rec' : 'dev')
+  // Being paid back goes by event: pick the event, then who still owes their part.
+  if (d === 'rec') return <Navigate to={`/saldar?persona=${p.id}`} replace />
   const dev = d === 'dev'
   const debt = Math.abs(p.balance)
   const amount = Math.round(debt * part)
@@ -218,7 +247,7 @@ export function Settle() {
             <Tab active={dev} onClick={() => setDir('dev')}>
               {group ? 'Les devolví' : 'Le devolví'}
             </Tab>
-            <Tab active={!dev} onClick={() => setDir('rec')}>
+            <Tab active={false} onClick={() => setDir('rec')}>
               {group ? 'Me devolvieron' : 'Me devolvió'}
             </Tab>
           </div>
@@ -267,6 +296,140 @@ export function Settle() {
               ? 'Devolver plata de otros no es un gasto tuyo: baja lo que debés y tu plata libre real se mantiene.'
               : `Si ${p.name} te devuelve algo que adelantaste, cuenta como plata tuya.`}
           </Muted>
+        </Glass>
+      </div>
+    </>
+  )
+}
+
+// Someone pays back their part of an event: event first, then only those who haven't yet.
+export function ReceiveReturn() {
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const preset = Number(params.get('persona')) || null
+  const { data: events } = useApi<EventItem[]>('/events')
+  const { data: accounts } = useApi<Account[]>('/accounts')
+  const [eventId, setEventId] = useState('')
+  const [personId, setPersonId] = useState<number | null>(null)
+  const [accountId, setAccountId] = useState<number | null>(null)
+  const { data: ev } = useApi<EventDetail>(eventId ? `/events/${eventId}` : null)
+  const save = useSave((body: object) => api.post('/movements', body))
+  if (!events || !accounts) return <Loading />
+
+  const choices = events.filter((e) => !e.closed && e.people.length && (!preset || e.people.some((p) => p.id === preset)))
+  const owing = ev?.people.filter((p) => p.balance > 0) ?? []
+  const who = owing.find((p) => p.id === (personId ?? preset)) ?? (owing.length === 1 ? owing[0] : undefined)
+  const sources = accounts.filter((a) => a.type !== 'credit_card')
+  const acc = sources.find((a) => a.id === accountId) ?? sources.find((a) => a.type === 'bank') ?? sources[0]
+  const amount = who?.balance ?? 0
+  const title = who ? `${who.name} me devolvió` : 'Me devolvieron'
+
+  return (
+    <>
+      <BackTitle to={preset ? `/personas/${preset}` : '/'} label={preset ? 'Persona' : 'Inicio'}>
+        {title}
+      </BackTitle>
+      <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{title}</h1>
+      <div className="flex flex-wrap items-start gap-7">
+        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-7 lg:rounded-[36px] lg:p-8">
+          <div>
+            <Label htmlFor="ev">Evento</Label>
+            <Select
+              value={eventId}
+              onValueChange={(v) => {
+                setEventId(v)
+                setPersonId(null)
+              }}
+            >
+              <SelectTrigger id="ev">
+                <SelectValue placeholder={choices.length ? 'Elegí un evento' : 'No hay eventos abiertos'} />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((e) => (
+                  <SelectItem key={e.id} value={String(e.id)}>
+                    {e.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Collapse open={!!ev}>
+            <div className="flex flex-col gap-5">
+              <div>
+                <Caption>Quién devuelve</Caption>
+                {owing.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {owing.map((p) => (
+                      <Tab key={p.id} active={p.id === who?.id} onClick={() => setPersonId(p.id)}>
+                        {p.name}
+                      </Tab>
+                    ))}
+                  </div>
+                ) : (
+                  <Muted>Todos ya devolvieron su parte de este evento.</Muted>
+                )}
+              </div>
+              <Collapse open={!!who}>
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <Caption>Monto</Caption>
+                    <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em]">{money(amount)}</div>
+                  </div>
+                  <div>
+                    <Caption>Entró a</Caption>
+                    <div className="flex flex-wrap gap-2">
+                      {sources.map((a) => (
+                        <Tab key={a.id} active={a.id === acc?.id} onClick={() => setAccountId(a.id)}>
+                          {a.name}
+                        </Tab>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Collapse>
+            </div>
+          </Collapse>
+          <ErrorText error={save.error} />
+          <Button
+            disabled={!who || !acc || save.isPending}
+            className="self-start"
+            onClick={() =>
+              save.mutate(
+                {
+                  type: 'income',
+                  amount,
+                  date: localDateTime(),
+                  accountId: acc!.id,
+                  isOthers: true,
+                  personId: who!.id,
+                  relation: 'returned_to_me',
+                  eventId: Number(eventId),
+                  description: title,
+                },
+                { onSuccess: () => navigate(`/eventos/${eventId}`) },
+              )
+            }
+          >
+            Confirmar
+          </Button>
+        </Glass>
+        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-7 lg:rounded-[36px]">
+          <div className="text-[15px] font-bold">Cómo queda</div>
+          {who && acc ? (
+            <>
+              <Muted className="mt-2">Cuenta con {who.name} en este evento</Muted>
+              <div className="num text-2xl font-bold">
+                {money(who.balance)} <span className="text-muted-foreground">→</span> <span className="text-brand">{money(0)}</span>
+              </div>
+              <Muted className="mt-2">{acc.name}</Muted>
+              <div className="num text-2xl font-bold">
+                {signed(acc.balance)} <span className="text-muted-foreground">→</span> {signed(acc.balance + amount)}
+              </div>
+            </>
+          ) : (
+            <Muted className="mt-2">Elegí el evento y quién devuelve.</Muted>
+          )}
+          <Muted className="mt-3 text-[13px]">Cada persona devuelve su parte una sola vez por evento.</Muted>
         </Glass>
       </div>
     </>
@@ -334,14 +497,15 @@ export function EventPage() {
   if (!e) return <Loading />
 
   const many = e.people.length > 1 || e.people[0]?.kind === 'group'
-  const pct = e.received ? Math.round((e.spent / e.received) * 100) : 0
   const title = e.balance < 0 ? (many ? 'Les debés' : 'Le debés') : e.balance > 0 ? (many ? 'Te deben' : 'Te debe') : 'Quedó en cero'
   const names = e.people.length ? listNames(e.people.map((p) => p.name)) : 'Sin personas'
   const single = e.people.length === 1 ? e.people[0] : null
+  // Planned but not paid yet: nothing is owed until the payment is ticked.
+  const planned = e.payment && !e.movements.some((m) => m.type === 'expense' && !m.isOthers)
 
   return (
     <>
-      <BackTitle to="/configuracion?seccion=eventos" label="Eventos">
+      <BackTitle to="/pagos/eventos" label="Eventos">
         {e.name}
       </BackTitle>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -362,13 +526,12 @@ export function EventPage() {
             <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em]', e.balance < 0 ? 'text-owe' : e.balance > 0 ? 'text-brand' : '')}>
               {money(e.balance)}
             </div>
-            {e.received > 0 && (
-              <>
-                <Muted>
-                  Te pasaron {money(e.received)} · se gastó {money(e.spent)}
-                </Muted>
-                <Bar className="mt-4" pct={pct} label={`${pct}% gastado`} />
-              </>
+            {planned && (
+              <Muted className="mt-1">
+                {e.people.length
+                  ? `Calculado sobre el gasto planificado de ${money(e.payment!.amount)}. Todavía no lo pagaste, no se descontó de tu cuenta.`
+                  : `Gasto planificado de ${money(e.payment!.amount)}. Sumá personas para repartirlo.`}
+              </Muted>
             )}
           </Glass>
           <div className="flex flex-wrap gap-2.5">

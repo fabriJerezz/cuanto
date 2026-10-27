@@ -78,6 +78,23 @@ export class FixedExpense {
   @ManyToOne(() => Account, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'accountId' })
   account: Account;
+  // Set = a one-off payment that only exists in that 'YYYY-MM'; null = repeats every month.
+  @Column({ type: 'varchar', nullable: true }) month: string | null;
+  // The event this payment pays for: ticking it records the expense on the event.
+  @Column({ type: 'integer', nullable: true }) eventId: number | null;
+  @ManyToOne(() => Event, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'eventId' })
+  event: Event | null;
+}
+
+// "Este mes no": a fixed expense left out of one month (not shown, not counted as pending).
+@Entity()
+export class SkippedPayment {
+  @PrimaryColumn({ type: 'integer' }) fixedExpenseId: number;
+  @PrimaryColumn({ type: 'varchar' }) month: string;
+  @ManyToOne(() => FixedExpense, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'fixedExpenseId' })
+  fixedExpense: FixedExpense;
 }
 
 @Entity()
@@ -138,4 +155,4 @@ export class Session {
   @CreateDateColumn() createdAt: Date;
 }
 
-export const ENTITIES = [Account, Person, Event, Category, FixedExpense, Movement, Session];
+export const ENTITIES = [Account, Person, Event, Category, FixedExpense, SkippedPayment, Movement, Session];
