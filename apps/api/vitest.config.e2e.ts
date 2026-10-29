@@ -6,6 +6,6 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
-    env: { DB_PATH: ':memory:' },
+    env: { DB_PATH: ':memory:', LOGIN_PIN: '4321' },
   },
 });

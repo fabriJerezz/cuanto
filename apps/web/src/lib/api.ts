@@ -1,9 +1,9 @@
-import { QueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { QueryCache, QueryClient, useMutation, useQuery } from '@tanstack/react-query'
 
 export type AccountType = 'cash' | 'bank' | 'wallet' | 'credit_card'
 export type MovementType = 'income' | 'expense' | 'transfer'
 export type IncomeRelation = 'passed_to_spend' | 'returned_to_me' | 'lent_to_me'
-export type ExpenseRelation = 'advanced' | 'spent_theirs' | 'returned'
+export type ExpenseRelation = 'advanced' | 'returned'
 export type Relation = IncomeRelation | ExpenseRelation
 
 export interface Account {
@@ -22,15 +22,18 @@ export interface Person {
 export interface PersonRow extends Person {
   balance: number
   lastMovementDate: string | null
+  debts: { eventId: number; eventName: string; amount: number }[]
   eventName: string | null
 }
 export interface EventItem {
   id: number
   name: string
-  personId: number | null
-  person: Person | null
+  people: Person[]
+  includeMe: boolean
   closed: boolean
   balance: number
+  // Planned payment for the month, if the event was created with an amount.
+  payment: { amount: number; accountId: number; dayOfMonth: number; month: string | null } | null
 }
 export interface Category {
   id: number
@@ -44,6 +47,7 @@ export interface FixedExpense {
   dayOfMonth: number
   accountId: number
   account: Account
+  month: string | null
 }
 export interface Movement {
   id: number
@@ -69,11 +73,12 @@ export interface Rendition {
   balance: number
   received: number
   spent: number
-  movements: Movement[]
 }
-export type PersonDetail = Person & Rendition & { events: EventItem[] }
-export type EventDetail = EventItem & Rendition
-export type CategoryDetail = Category & { month: string; spent: number; movements: Movement[] }
+// share: this person's part of a shared event expense (null for their own movements).
+export type PersonDetail = Person & Rendition & { events: EventItem[]; movements: (Movement & { share: number | null })[] }
+export type EventDetail = Omit<EventItem, 'people'> &
+  Rendition & { people: (Person & { balance: number })[]; movements: (Movement & { myShare: number | null })[] }
+export type CategoryDetail = Category & { month: string; spent: number; movements: (Movement & { myShare: number })[] }
 
 export interface Payment {
   kind: 'fixed' | 'card'
@@ -82,7 +87,9 @@ export interface Payment {
   amount: number
   dueDate: string
   accountId: number
+  eventId: number | null
   paid: boolean
+  skipped: boolean
   movementId: number | null
 }
 export interface Summary {
@@ -90,7 +97,7 @@ export interface Summary {
   free: number
   totalInAccounts: number
   cardDebt: number
-  accounts: { id: number; name: string; type: AccountType; balance: number; pct: number | null }[]
+  accounts: { id: number; name: string; type: AccountType; balance: number; pct: number | null; split: { free: number; pending: number; others: number } | null }[]
   owners: { free: number; pending: number; others: number; freePct: number; pendingPct: number; othersPct: number }
   payments: Payment[]
   pendingTotal: number
@@ -102,7 +109,13 @@ export interface Summary {
   eventsWithOthers: { count: number; amount: number }
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -113,20 +126,30 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     const msg = Array.isArray(err.message) ? err.message.join('. ') : err.message
-    throw new ApiError(msg ?? `Error ${res.status}`)
+    throw new ApiError(msg ?? `Error ${res.status}`, res.status)
   }
   const text = await res.text()
-  return text ? JSON.parse(text) : (undefined as T)
+  // Empty bodies (204) resolve to null: TanStack Query rejects undefined data.
+  return text ? JSON.parse(text) : (null as T)
 }
 
 export const api = {
   get: <T>(url: string) => request<T>('GET', url),
   post: <T>(url: string, body: unknown) => request<T>('POST', url, body),
   patch: <T>(url: string, body: unknown) => request<T>('PATCH', url, body),
+  put: (url: string) => request<void>('PUT', url),
   del: (url: string) => request<void>('DELETE', url),
 }
 
-export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
+const unauthorized = (e: unknown) => e instanceof ApiError && e.status === 401
+
+export const queryClient: QueryClient = new QueryClient({
+  // A 401 anywhere (session expired, PIN changed) sends you back to the PIN screen.
+  queryCache: new QueryCache({
+    onError: (e, q) => unauthorized(e) && q.queryKey[0] !== '/auth/me' && queryClient.invalidateQueries({ queryKey: ['/auth/me'] }),
+  }),
+  defaultOptions: { queries: { staleTime: 10_000, retry: (n, e) => !unauthorized(e) && n < 2 } },
+})
 
 // The query key is the URL, so any page can read any endpoint without a hook per resource.
 export function useApi<T>(url: string | null) {

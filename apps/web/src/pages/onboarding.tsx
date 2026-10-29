@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Navigate, useNavigate } from 'react-router'
 import { ErrorText, Glass, Label } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { api, queryClient, type Account, type Summary } from '@/lib/api'
+import { api, queryClient, useApi, type Account, type Summary } from '@/lib/api'
 import { currentMonth, money, moneyInput, parseMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -36,7 +36,11 @@ export default function Onboarding() {
   const [free, setFree] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const { data: accounts } = useApi<Account[]>('/accounts')
   const d = STEPS[step]
+
+  // Already set up (e.g. a reload left this URL open): go home instead of starting over.
+  if (step === 0 && accounts?.length) return <Navigate to="/" replace />
 
   // Each step saves on "Continuar"; going back and forth never creates things twice.
   const next = async () => {

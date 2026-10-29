@@ -10,6 +10,10 @@ export function configure(app: INestApplication) {
 }
 
 if (process.env.NODE_ENV !== 'test') {
+  // Optional apps/api/.env (LOGIN_PIN, DB_PATH, PORT).
+  try {
+    process.loadEnvFile();
+  } catch {}
   const app = await NestFactory.create(AppModule);
   configure(app);
   await app.listen(process.env.PORT ?? 3000);

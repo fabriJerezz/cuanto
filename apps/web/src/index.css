@@ -43,6 +43,9 @@
   --color-transfer: #1f4fa8;
   --color-danger: #a82f24;
   --color-line: rgb(16 32 27 / 0.07);
+
+  /* Apple-style spring-ish curves */
+  --ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 :root {
@@ -73,6 +76,14 @@
   }
   html {
     @apply font-sans;
+  }
+  button {
+    @apply press;
+  }
+  /* Keyboard focus: same soft brand halo as the inputs (a box-shadow, so it never falls back to the browser's outline). */
+  :where(button, a, [role='checkbox'], [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(15 107 92 / 0.2);
   }
   body {
     @apply min-h-dvh text-foreground;
@@ -108,4 +119,35 @@
 
 @utility num {
   font-variant-numeric: tabular-nums;
+}
+
+/* Motion: shared transition + press feedback for anything clickable. */
+@utility press {
+  transition:
+    scale 250ms var(--ease-apple),
+    background-color 300ms var(--ease-apple),
+    border-color 300ms var(--ease-apple),
+    color 300ms var(--ease-apple),
+    box-shadow 300ms var(--ease-apple),
+    opacity 300ms var(--ease-apple),
+    outline-color 250ms var(--ease-apple),
+    outline-offset 250ms var(--ease-apple);
+  &:where(:not(:disabled)):active {
+    scale: 0.95;
+  }
+}
+
+@keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(0.98) } }
+@keyframes pop-out { to { opacity: 0; transform: translateY(6px) scale(0.98) } }
+@keyframes page-in { from { opacity: 0; transform: translateY(10px) } }
+
+/* data-state="open|closed" drives enter and exit; usePresence unmounts after the exit ends. */
+.pop[data-state='open'] { animation: pop-in 450ms var(--ease-apple) }
+.pop[data-state='closed'] { animation: pop-out 280ms var(--ease-apple) forwards }
+.page { animation: page-in 500ms var(--ease-apple) }
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
