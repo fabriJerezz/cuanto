@@ -1,6 +1,6 @@
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { cn } from '@/lib/utils'
 
 export function Glass({ className, soft, ...props }: ComponentProps<'div'> & { soft?: boolean }) {
@@ -9,8 +9,8 @@ export function Glass({ className, soft, ...props }: ComponentProps<'div'> & { s
 
 export function PageTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-3">
-      <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[32px]">{children}</h1>
+    <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <h1 className="min-w-0 text-[28px] leading-tight font-bold tracking-[-0.02em] lg:text-[32px]">{children}</h1>
       {action}
     </div>
   )
@@ -24,14 +24,46 @@ export function BackTitle({ to, label, children }: { to: string; label: string; 
         ← {label}
       </Link>
       {children && (
-        <div className="flex h-12 shrink-0 items-center gap-2 lg:hidden">
-          <Link to={to} aria-label={`Volver a ${label}`} className="-ml-2.5 flex size-11 items-center justify-center">
+        <div className="flex min-h-12 shrink-0 items-center gap-1 lg:hidden">
+          <Link to={to} aria-label={`Volver a ${label}`} className="press -ml-2.5 flex size-11 shrink-0 items-center justify-center">
             <ChevronLeft className="size-6" strokeWidth={1.75} />
           </Link>
-          <h1 className="text-xl font-bold">{children}</h1>
+          <h1 className="min-w-0 text-xl leading-tight font-bold">{children}</h1>
         </div>
       )}
     </>
+  )
+}
+
+// Big money figure, always on one line: it shrinks with its length so the longest amount still fits
+// its card on a phone. Largest size: --max.
+export function Amount({ children, className }: { children: string; className?: string }) {
+  return (
+    <div className="@container min-w-0">
+      <div
+        className={cn('leading-[1.2] font-bold tracking-[-0.03em] whitespace-nowrap', className)}
+        // 0.52em: the widest a character of an amount averages in Manrope bold, whatever its digits.
+        style={{ fontSize: `min(var(--max, 48px), ${(100 / (children.length * 0.52)).toFixed(2)}cqi)` }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// Tabs in one swipeable line that bleeds to the screen edges on phones; the current route's tab scrolls into view.
+export function TabStrip({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const strip = ref.current!
+    const on = strip.querySelector<HTMLElement>('[aria-current=page]')
+    if (on) strip.scrollTo({ left: on.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2, behavior: 'smooth' })
+  }, [pathname])
+  return (
+    <div ref={ref} className="no-scrollbar relative -mx-(--gutter) flex shrink-0 gap-2 overflow-x-auto px-(--gutter) pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
+      {children}
+    </div>
   )
 }
 
@@ -124,12 +156,12 @@ export function Collapse({ open, children, className }: { open: boolean; childre
       ref={ref}
       onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === 'grid-template-rows' && setSettled(open)}
       className={cn(
-        'grid transition-[grid-template-rows,opacity,margin-top] duration-300 ease-apple',
+        'grid min-w-0 transition-[grid-template-rows,opacity,margin-top] duration-300 ease-apple',
         open ? 'grid-rows-[1fr] opacity-100' : 'mt-[calc(var(--g)*-1)] grid-rows-[0fr] opacity-0',
         className,
       )}
     >
-      <div inert={!open} className={cn('min-h-0', !(open && settled) && 'overflow-hidden')}>
+      <div inert={!open} className={cn('min-h-0 min-w-0', !(open && settled) && 'overflow-hidden')}>
         {open ? children : last.current}
       </div>
     </div>
@@ -159,6 +191,50 @@ export function Presence({ open, children, className }: { open: boolean; childre
   return (
     <div {...props} className={cn('pop', className)}>
       {open ? children : last.current}
+    </div>
+  )
+}
+
+// Title bar of a bottom sheet (.sheet in index.css): drag it down or tap the × to dismiss.
+export function SheetHeader({ title, onClose, className }: { title: string; onClose: () => void; className?: string }) {
+  const drag = useRef<{ startY: number; dy: number; sheet: HTMLElement; transition: string } | null>(null)
+  const end = () => {
+    if (!drag.current) return
+    const { dy, sheet, transition } = drag.current
+    drag.current = null
+    if (dy > 80) {
+      // Stays where it was dropped while the sheet's own exit plays.
+      onClose()
+      setTimeout(() => (sheet.style.translate = ''), 400)
+    } else {
+      sheet.style.transition = `${transition ? `${transition}, ` : ''}translate 250ms var(--ease-apple)`
+      sheet.style.translate = ''
+      setTimeout(() => (sheet.style.transition = transition), 260)
+    }
+  }
+  return (
+    <div
+      className={cn('relative flex shrink-0 touch-none items-center justify-between', className)}
+      onPointerDown={(e) => {
+        const sheet = e.currentTarget.closest<HTMLElement>('.sheet')
+        if (e.pointerType === 'mouse' || !sheet || (e.target as Element).closest('button')) return
+        e.currentTarget.setPointerCapture(e.pointerId)
+        drag.current = { startY: e.clientY, dy: 0, sheet, transition: sheet.style.transition }
+        sheet.style.transition = 'none'
+      }}
+      onPointerMove={(e) => {
+        if (!drag.current) return
+        drag.current.dy = Math.max(0, e.clientY - drag.current.startY)
+        drag.current.sheet.style.translate = `0 ${drag.current.dy}px`
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+    >
+      <span aria-hidden="true" className="absolute top-2 left-1/2 h-1 w-9 -translate-x-1/2 rounded-full bg-foreground/15 lg:hidden" />
+      <h2 className="min-w-0 truncate pt-3 text-base font-bold lg:pt-0">{title}</h2>
+      <button type="button" aria-label="Cerrar" onClick={onClose} className="-mr-2.5 flex size-11 shrink-0 cursor-pointer items-center justify-center pt-1 lg:pt-0">
+        <X className="size-6" strokeWidth={1.75} />
+      </button>
     </div>
   )
 }

@@ -1,8 +1,9 @@
-import { Pencil, Repeat, PartyPopper, Tag, Users, Wallet } from 'lucide-react'
+import { Pencil, Trash2, Repeat, PartyPopper, Tag, Users, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { Caption, Chip, ErrorText, Glass, Label, Loading, Muted, Presence, Tab } from '@/components/kit'
+import { Caption, Chip, ErrorText, Glass, Label, Loading, Muted, Presence, SheetHeader, Tab, TabStrip } from '@/components/kit'
 import { Button } from '@/components/ui/button'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { api, useApi, useSave, type Account, type Category, type EventItem, type FixedExpense, type Person } from '@/lib/api'
@@ -24,6 +25,8 @@ interface Section<T> {
   id: string
   label: string
   short?: string
+  // Title of the mobile sheet when creating one.
+  add: string
   url: string
   note: string
   row: (item: T) => { name: string; sub: string; amount?: string }
@@ -39,6 +42,7 @@ const SECTIONS = [
   {
     id: 'cuentas',
     label: 'Cuentas',
+    add: 'Nueva cuenta',
     url: '/accounts',
     note: 'Las cuentas arman la composición de tu plata. La tarjeta cuenta como deuda, no como saldo.',
     row: (a: Account) => ({ name: a.name, sub: ACCOUNT_LABEL[a.type], amount: a.type === 'credit_card' ? money(a.balance) : signed(a.balance) }),
@@ -73,6 +77,7 @@ const SECTIONS = [
   {
     id: 'fijos',
     label: 'Gastos fijos',
+    add: 'Nuevo gasto fijo',
     url: '/fixed-expenses',
     note: 'Se repiten todos los meses y aparecen solos como pendientes. Los de un solo mes se agregan con «Agregar pago de este mes».',
     row: (f: FixedExpense) => ({ name: f.name, sub: `Día ${f.dayOfMonth} · ${f.account.name}${f.month ? ' · solo ' + monthName(f.month) : ''}`, amount: money(f.amount) }),
@@ -93,6 +98,7 @@ const SECTIONS = [
     id: 'personas',
     label: 'Personas y grupos',
     short: 'Personas',
+    add: 'Nueva persona o grupo',
     url: '/people',
     note: 'Personas y grupos con los que tenés plata en común. Cada uno tiene su cuenta corriente.',
     row: (p: Person) => ({ name: p.name, sub: p.kind === 'group' ? 'Grupo' : 'Persona' }),
@@ -112,6 +118,7 @@ const SECTIONS = [
   {
     id: 'eventos',
     label: 'Eventos',
+    add: 'Nuevo evento',
     url: '/events',
     note: 'Salidas, viajes o compras en conjunto. Los gastos se reparten en partes iguales entre sus personas, y con vos si participás.',
     row: (e: EventItem) => ({
@@ -144,6 +151,7 @@ const SECTIONS = [
   {
     id: 'cats',
     label: 'Categorías',
+    add: 'Nueva categoría',
     url: '/categories',
     note: 'Categorías con un tope mensual. Te avisamos cuando te acercás al límite.',
     row: (c: Category) => ({ name: c.name, sub: 'Tope mensual', amount: money(c.monthlyLimit) }),
@@ -179,82 +187,87 @@ function Editor({ section, item, onDone }: { section: AnySection; item?: { id: n
   const remove = useSave(() => api.del(`${section.url}/${item!.id}`))
 
   return (
-    <Glass className="flex flex-col gap-3.5 p-[22px] lg:rounded-[32px] lg:p-7">
-      {section.fields
-        .filter((f) => !f.show || f.show(v))
-        .map((f) => (
-          <div key={f.id}>
-            <Label htmlFor={`${section.id}-${f.id}`}>{typeof f.label === 'function' ? f.label(v) : f.label}</Label>
-            <Input
-              id={`${section.id}-${f.id}`}
-              inputMode={f.id === 'name' ? undefined : 'numeric'}
-              placeholder={f.placeholder}
-              value={f.money && v[f.id] ? `$ ${v[f.id]}` : v[f.id]}
-              onChange={(e) => set(f.id, f.money ? moneyInput(e.target.value) : f.id === 'name' ? e.target.value : e.target.value.replace(/\D/g, ''))}
-            />
-          </div>
-        ))}
-      {section.chips && (
-        <div>
-          <Caption>{section.chips.label}</Caption>
-          <div className="flex flex-wrap gap-2">
-            {section.chips.options.map(([val, label]) => (
-              <Chip key={val} active={v[section.chips!.key] === val} onClick={() => set(section.chips!.key, val)}>
-                {label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      )}
-      {accounts && (
-        <div>
-          <Caption>{section.id === 'eventos' ? 'Se paga con (si ponés monto)' : 'Se paga con'}</Caption>
-          <div className="flex flex-wrap gap-2">
-            {accounts.map((a) => (
-              <Chip key={a.id} active={String(a.id) === accountId} onClick={() => set('accountId', String(a.id))}>
-                {a.name}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      )}
-      {people && (
-        <>
+    <Glass className="flex flex-col p-[22px] max-lg:max-h-(--sheet-max) max-lg:rounded-b-none max-lg:border-x-0 max-lg:border-b-0 max-lg:bg-[#EEF3F0] max-lg:pt-1 max-lg:pb-0 lg:rounded-[32px] lg:p-7">
+      <SheetHeader title={item ? `Editar ${section.row(item).name}` : section.add} onClose={onDone} className="mb-2 lg:hidden" />
+      {/* -mx/px: room for the inputs' focus halo inside the scroll area. */}
+      <div className="-mx-1 flex min-h-0 flex-col gap-3.5 overflow-y-auto overscroll-contain px-1 pb-(--sheet-pb) lg:overflow-visible lg:pb-0">
+        {section.fields
+          .filter((f) => !f.show || f.show(v))
+          .map((f) => (
+            <div key={f.id}>
+              <Label htmlFor={`${section.id}-${f.id}`}>{typeof f.label === 'function' ? f.label(v) : f.label}</Label>
+              <Input
+                id={`${section.id}-${f.id}`}
+                inputMode={f.id === 'name' ? undefined : 'numeric'}
+                placeholder={f.placeholder}
+                value={f.money && v[f.id] ? `$ ${v[f.id]}` : v[f.id]}
+                onChange={(e) => set(f.id, f.money ? moneyInput(e.target.value) : f.id === 'name' ? e.target.value : e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+          ))}
+        {section.chips && (
           <div>
-            <Caption>Personas</Caption>
+            <Caption>{section.chips.label}</Caption>
             <div className="flex flex-wrap gap-2">
-              {people.map((p) => {
-                const ids = v.personIds ? v.personIds.split(',') : []
-                const on = ids.includes(String(p.id))
-                return (
-                  <Chip key={p.id} active={on} onClick={() => set('personIds', (on ? ids.filter((x) => x !== String(p.id)) : [...ids, String(p.id)]).join(','))}>
-                    {p.name}
-                  </Chip>
-                )
-              })}
-              {people.length === 0 && <Muted>Todavía no cargaste personas.</Muted>}
+              {section.chips.options.map(([val, label]) => (
+                <Chip key={val} active={v[section.chips!.key] === val} onClick={() => set(section.chips!.key, val)}>
+                  {label}
+                </Chip>
+              ))}
             </div>
           </div>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-semibold">
-            <Checkbox checked={v.includeMe === 'true'} onCheckedChange={(c) => set('includeMe', String(c === true))} />
-            Participo (los gastos se reparten también con vos)
-          </label>
-        </>
-      )}
-      {!item && (section.id === 'fijos' || section.id === 'eventos') && <ShortNote accountId={Number(accountId) || undefined} amount={parseMoney(v.amount ?? '')} />}
-      <ErrorText error={save.error ?? remove.error} />
-      <div className="flex flex-wrap gap-2.5">
-        <Button
-          disabled={!v.name.trim() || save.isPending}
-          onClick={() => save.mutate(undefined, { onSuccess: onDone })}
-        >
-          Guardar
-        </Button>
-        {item && (
-          <Button variant="glass" className="text-danger" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: onDone })}>
-            Eliminar
-          </Button>
         )}
+        {accounts && (
+          <div>
+            <Caption>{section.id === 'eventos' ? 'Se paga con (si ponés monto)' : 'Se paga con'}</Caption>
+            <div className="flex flex-wrap gap-2">
+              {accounts.map((a) => (
+                <Chip key={a.id} active={String(a.id) === accountId} onClick={() => set('accountId', String(a.id))}>
+                  {a.name}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        )}
+        {people && (
+          <>
+            <div>
+              <Caption>Personas</Caption>
+              <div className="flex flex-wrap gap-2">
+                {people.map((p) => {
+                  const ids = v.personIds ? v.personIds.split(',') : []
+                  const on = ids.includes(String(p.id))
+                  return (
+                    <Chip key={p.id} active={on} onClick={() => set('personIds', (on ? ids.filter((x) => x !== String(p.id)) : [...ids, String(p.id)]).join(','))}>
+                      {p.name}
+                    </Chip>
+                  )
+                })}
+                {people.length === 0 && <Muted>Todavía no cargaste personas.</Muted>}
+              </div>
+            </div>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-semibold">
+              <Checkbox checked={v.includeMe === 'true'} onCheckedChange={(c) => set('includeMe', String(c === true))} />
+              Participo (los gastos se reparten también con vos)
+            </label>
+          </>
+        )}
+        {!item && (section.id === 'fijos' || section.id === 'eventos') && <ShortNote accountId={Number(accountId) || undefined} amount={parseMoney(v.amount ?? '')} />}
+        <ErrorText error={save.error ?? remove.error} />
+        <div className="flex flex-wrap gap-2.5">
+          <Button
+            className="grow lg:grow-0"
+            disabled={!v.name.trim() || save.isPending}
+            onClick={() => save.mutate(undefined, { onSuccess: onDone })}
+          >
+            Guardar
+          </Button>
+          {item && (
+            <Button variant="glass" className="grow text-danger lg:grow-0" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: onDone })}>
+              Eliminar
+            </Button>
+          )}
+        </div>
       </div>
     </Glass>
   )
@@ -266,11 +279,12 @@ export function Manager({ sectionId }: { sectionId: string }) {
   const section = SECTIONS.find((s) => s.id === sectionId) as unknown as AnySection
   const { data: items } = useApi<{ id: number }[]>(section.url)
   const editItem = typeof editing === 'number' ? items?.find((i) => i.id === editing) : undefined
+  const remove = useSave((id: number) => api.del(`${section.url}/${id}`))
 
   return (
     <>
       <Muted className="px-1">{section.note}</Muted>
-      <div className="flex flex-wrap items-start gap-7">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
         <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-3">
           <Glass className="p-1.5">
             {!items && <Loading />}
@@ -289,9 +303,8 @@ export function Manager({ sectionId }: { sectionId: string }) {
                   </div>
                 </>
               )
-              return (
+              const row = (
                 <div
-                  key={it.id}
                   className={cn(
                     'flex min-h-16 items-center gap-3 rounded-[22px] pr-2 pl-3 transition-colors duration-300 ease-apple hover:bg-white/45 lg:min-h-[68px] lg:rounded-[26px] [&+&]:mt-0.5',
                     editing === it.id && 'bg-brand/10 hover:bg-brand/10',
@@ -302,7 +315,9 @@ export function Manager({ sectionId }: { sectionId: string }) {
                       {body}
                     </Link>
                   ) : (
-                    <div className="flex min-w-0 flex-1 items-center gap-3">{body}</div>
+                    <button type="button" tabIndex={-1} onClick={() => setEditing(editing === it.id ? null : it.id)} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left">
+                      {body}
+                    </button>
                   )}
                   {r.amount && <div className="num text-[15px] font-bold text-brand-dark">{r.amount}</div>}
                   <button
@@ -319,18 +334,39 @@ export function Manager({ sectionId }: { sectionId: string }) {
                   </button>
                 </div>
               )
+              return (
+                <ContextMenu key={it.id}>
+                  <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem onSelect={() => setEditing(it.id)}>
+                      <Pencil /> Editar
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      destructive
+                      onSelect={() => remove.mutate(it.id, { onSuccess: () => editing === it.id && setEditing(null) })}
+                    >
+                      <Trash2 /> Eliminar
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              )
             })}
+            <ErrorText error={remove.error} />
           </Glass>
           <Button
             variant="ghost"
-            className="self-start border-brand/25 bg-brand/12 text-brand-dark hover:bg-brand/20"
+            className="w-full border-brand/25 bg-brand/12 text-brand-dark hover:bg-brand/20 lg:w-auto lg:self-start"
             aria-expanded={editing === 'new'}
             onClick={() => setEditing(editing === 'new' ? null : 'new')}
           >
             {editing === 'new' ? 'Cancelar' : <><Icon name="plus" size={18} /> Agregar</>}
           </Button>
         </div>
-        <Presence open={editing !== null} className="min-w-0 flex-[2_1_340px]">
+        <div
+          onClick={() => setEditing(null)}
+          className={cn('fixed inset-0 z-30 bg-foreground/20 transition-opacity duration-300 ease-apple lg:hidden', editing === null && 'pointer-events-none opacity-0')}
+        />
+        <Presence open={editing !== null} className="sheet min-w-0 flex-[2_1_340px]">
           <Editor key={`${sectionId}-${editing}`} section={section} item={editItem} onDone={() => setEditing(null)} />
         </Presence>
       </div>
@@ -347,18 +383,18 @@ export default function Settings() {
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-2">
-        <Link to="/" aria-label="Volver al inicio" className="-ml-2.5 flex size-11 items-center justify-center lg:hidden">
+      <div className="flex min-h-12 shrink-0 items-center gap-1">
+        <Link to="/" aria-label="Volver al inicio" className="press -ml-2.5 flex size-11 shrink-0 items-center justify-center lg:hidden">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 5l-7 7 7 7" />
           </svg>
         </Link>
-        <h1 className="flex-1 text-xl font-bold lg:text-[32px] lg:tracking-[-0.02em]">Configuración</h1>
-        <Button variant="ghost" size="sm" onClick={logout}>
+        <h1 className="min-w-0 flex-1 text-xl font-bold lg:text-[32px] lg:tracking-[-0.02em]">Configuración</h1>
+        <Button variant="ghost" size="sm" className="-mr-2 px-2 text-muted-foreground lg:mr-0 lg:px-[18px] lg:text-foreground" onClick={logout}>
           Cerrar sesión
         </Button>
       </div>
-      <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
+      <TabStrip>
         {MAIN.map((s) => (
           <Tab
             key={s.id}
@@ -375,7 +411,7 @@ export default function Settings() {
             )}
           </Tab>
         ))}
-      </div>
+      </TabStrip>
       <Manager key={sectionId} sectionId={sectionId} />
     </>
   )

@@ -1,7 +1,7 @@
 import { HandCoins, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
-import { BackTitle, Caption, ErrorText, Glass, Label, Loading, Muted, Tab, Collapse, useShortcut } from '@/components/kit'
+import { Amount, BackTitle, Caption, ErrorText, Glass, Label, Loading, Muted, Tab, Collapse, useShortcut } from '@/components/kit'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -15,7 +15,7 @@ import { MovementRows } from './movements'
 
 function Avatar({ name }: { name: string }) {
   return (
-    <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand/12 text-sm font-bold text-brand-dark">{initials(name)}</div>
+    <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand/12 text-sm font-bold text-brand-dark max-[359px]:hidden">{initials(name)}</div>
   )
 }
 
@@ -42,7 +42,7 @@ function BalanceLine({ p, sub, to, action, debts }: { p: Person & { balance: num
     <>
       <Avatar name={p.name} />
       <div className="min-w-0 flex-1">
-        <div className="text-[15px] font-semibold">{p.name}</div>
+        <div className="truncate text-[15px] font-semibold">{p.name}</div>
         {sub && <div className="truncate text-xs text-muted-foreground">{sub}</div>}
       </div>
       <div className="text-right">
@@ -51,7 +51,7 @@ function BalanceLine({ p, sub, to, action, debts }: { p: Person & { balance: num
       </div>
     </>
   )
-  const cls = 'flex min-h-[68px] items-center gap-3.5 border-line [&+&]:border-t'
+  const cls = 'tap flex min-h-[68px] items-center gap-3 border-line [&+&]:border-t lg:gap-3.5'
   if (to && debts?.length)
     return (
       <ContextMenu>
@@ -94,21 +94,21 @@ export function PeopleSummary({ owe, owed, className }: { owe: number; owed: num
 
   return (
     <Glass className={cn('px-[22px] py-4 lg:rounded-[36px] lg:px-7 lg:py-6', className)}>
-      <div className="flex flex-col gap-2 text-sm font-semibold">
-        <div className="flex items-baseline justify-between">
-          <span>Debés</span>
-          <b className="num text-xl text-owe lg:text-2xl">{money(owe)}</b>
+      <div className="grid grid-cols-2 gap-4 text-[13px] font-semibold text-muted-foreground">
+        <div>
+          Debés
+          <Amount className="text-owe [--max:24px] lg:[--max:28px]">{money(owe)}</Amount>
         </div>
-        <div className="flex items-baseline justify-between">
-          <span>Te deben</span>
-          <b className="num text-xl text-brand lg:text-2xl">{money(owed)}</b>
+        <div>
+          Te deben
+          <Amount className="text-brand [--max:24px] lg:[--max:28px]">{money(owed)}</Amount>
         </div>
       </div>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="mt-3 h-10 w-full cursor-pointer rounded-full border border-white/90 bg-white/52 text-sm font-semibold"
+        className="mt-3 h-11 w-full cursor-pointer rounded-full border border-white/90 bg-white/52 text-sm font-semibold"
       >
         {open ? 'Ocultar personas' : 'Ver personas'}
       </button>
@@ -132,9 +132,7 @@ function BalanceCard({ balance, group, context }: { balance: number; group: bool
   return (
     <Glass className="px-[26px] py-6 lg:rounded-[36px] lg:px-8 lg:py-7">
       <div className="text-sm font-semibold text-muted-foreground">{title}</div>
-      <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em]', balance < 0 ? 'text-owe' : balance > 0 ? 'text-brand' : '')}>
-        {money(balance)}
-      </div>
+      <Amount className={balance < 0 ? 'text-owe' : balance > 0 ? 'text-brand' : ''}>{money(balance)}</Amount>
       {context && balance !== 0 && <Muted>{context}</Muted>}
     </Glass>
   )
@@ -153,14 +151,14 @@ export function PersonPage() {
         {p.name}
       </BackTitle>
       <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{p.name}</h1>
-      <div className="flex flex-wrap items-start gap-7">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
         <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-4">
           <BalanceCard balance={p.balance} group={group} context={openEvent?.name} />
-          <div className="flex gap-2.5">
-            <Link to={p.balance > 0 ? `/saldar?persona=${p.id}` : `/personas/${p.id}/saldar`} className={cn(buttonVariants(), 'flex-1')}>
+          <div className="flex flex-wrap gap-2.5">
+            <Link to={p.balance > 0 ? `/saldar?persona=${p.id}` : `/personas/${p.id}/saldar`} className={cn(buttonVariants(), 'grow')}>
               {p.balance > 0 ? (group ? 'Me devolvieron' : 'Me devolvió') : group ? 'Les devolví' : 'Le devolví'}
             </Link>
-            <Button variant="glass" className="flex-1" onClick={() => openForm({ personId: p.id })}>
+            <Button variant="glass" className="grow" onClick={() => openForm({ personId: p.id })}>
               Nuevo movimiento
             </Button>
           </div>
@@ -241,8 +239,8 @@ export function Settle() {
         {title}
       </BackTitle>
       <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{title}</h1>
-      <div className="flex flex-wrap items-start gap-7">
-        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-7 lg:rounded-[36px] lg:p-8">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
+        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-[22px] lg:rounded-[36px] lg:p-8">
           <div className="flex flex-wrap gap-2">
             <Tab active={dev} onClick={() => setDir('dev')}>
               {group ? 'Les devolví' : 'Le devolví'}
@@ -253,7 +251,7 @@ export function Settle() {
           </div>
           <div>
             <Caption>Monto</Caption>
-            <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em]">{money(amount)}</div>
+            <Amount>{money(amount)}</Amount>
             <div className="mt-3 flex flex-wrap gap-2">
               {PARTS.map(([v, label]) => (
                 <Tab key={v} active={part === v} onClick={() => setPart(v)}>
@@ -273,20 +271,20 @@ export function Settle() {
             </div>
           </div>
           <ErrorText error={save.error} />
-          <Button disabled={!amount || !acc || save.isPending} onClick={confirm} className="self-start">
+          <Button disabled={!amount || !acc || save.isPending} onClick={confirm} className="w-full lg:w-auto lg:self-start">
             Confirmar
           </Button>
         </Glass>
-        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-7 lg:rounded-[36px]">
+        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-[22px] lg:rounded-[36px] lg:p-7">
           <div className="text-[15px] font-bold">Cómo queda</div>
           <Muted className="mt-2">Cuenta con {p.name}</Muted>
-          <div className="num text-2xl font-bold">
+          <div className="num text-xl font-bold lg:text-2xl">
             {money(p.balance)} <span className="text-muted-foreground">→</span> <span className="text-brand">{money(after)}</span>
           </div>
           {acc && (
             <>
               <Muted className="mt-2">{acc.name}</Muted>
-              <div className="num text-2xl font-bold">
+              <div className="num text-xl font-bold lg:text-2xl">
                 {signed(acc.balance)} <span className="text-muted-foreground">→</span> {signed(acc.balance + (dev ? -amount : amount))}
               </div>
             </>
@@ -330,8 +328,8 @@ export function ReceiveReturn() {
         {title}
       </BackTitle>
       <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{title}</h1>
-      <div className="flex flex-wrap items-start gap-7">
-        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-7 lg:rounded-[36px] lg:p-8">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
+        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-[22px] lg:rounded-[36px] lg:p-8">
           <div>
             <Label htmlFor="ev">Evento</Label>
             <Select
@@ -373,7 +371,7 @@ export function ReceiveReturn() {
                 <div className="flex flex-col gap-5">
                   <div>
                     <Caption>Monto</Caption>
-                    <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em]">{money(amount)}</div>
+                    <Amount>{money(amount)}</Amount>
                   </div>
                   <div>
                     <Caption>Entró a</Caption>
@@ -392,7 +390,7 @@ export function ReceiveReturn() {
           <ErrorText error={save.error} />
           <Button
             disabled={!who || !acc || save.isPending}
-            className="self-start"
+            className="w-full lg:w-auto lg:self-start"
             onClick={() =>
               save.mutate(
                 {
@@ -413,16 +411,16 @@ export function ReceiveReturn() {
             Confirmar
           </Button>
         </Glass>
-        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-7 lg:rounded-[36px]">
+        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-[22px] lg:rounded-[36px] lg:p-7">
           <div className="text-[15px] font-bold">Cómo queda</div>
           {who && acc ? (
             <>
               <Muted className="mt-2">Cuenta con {who.name} en este evento</Muted>
-              <div className="num text-2xl font-bold">
+              <div className="num text-xl font-bold lg:text-2xl">
                 {money(who.balance)} <span className="text-muted-foreground">→</span> <span className="text-brand">{money(0)}</span>
               </div>
               <Muted className="mt-2">{acc.name}</Muted>
-              <div className="num text-2xl font-bold">
+              <div className="num text-xl font-bold lg:text-2xl">
                 {signed(acc.balance)} <span className="text-muted-foreground">→</span> {signed(acc.balance + amount)}
               </div>
             </>
@@ -508,24 +506,23 @@ export function EventPage() {
       <BackTitle to="/pagos/eventos" label="Eventos">
         {e.name}
       </BackTitle>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* On a phone the header dissolves into the page so the rarely used "Cerrar evento" can go last. */}
+      <div className="contents lg:flex lg:flex-wrap lg:items-center lg:justify-between lg:gap-3">
         <div>
           <h1 className="hidden text-[28px] font-bold tracking-[-0.02em] lg:block">{e.name}</h1>
           <Muted>
             {names} · {e.closed ? 'cerrado' : 'abierto'}
           </Muted>
         </div>
-        <Button variant="glass" disabled={update.isPending} onClick={() => update.mutate({ closed: !e.closed })}>
+        <Button variant="glass" className="order-last w-full lg:order-none lg:w-auto" disabled={update.isPending} onClick={() => update.mutate({ closed: !e.closed })}>
           {e.closed ? 'Reabrir evento' : 'Cerrar evento'}
         </Button>
       </div>
-      <div className="flex flex-wrap items-start gap-7">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
         <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-3.5">
           <Glass className="px-[26px] py-6 lg:rounded-[36px] lg:px-8 lg:py-7">
             <div className="text-sm font-semibold text-muted-foreground">{title}</div>
-            <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em]', e.balance < 0 ? 'text-owe' : e.balance > 0 ? 'text-brand' : '')}>
-              {money(e.balance)}
-            </div>
+            <Amount className={e.balance < 0 ? 'text-owe' : e.balance > 0 ? 'text-brand' : ''}>{money(e.balance)}</Amount>
             {planned && (
               <Muted className="mt-1">
                 {e.people.length
@@ -536,12 +533,12 @@ export function EventPage() {
           </Glass>
           <div className="flex flex-wrap gap-2.5">
             {!e.closed && (
-              <Button onClick={() => openForm({ type: 'expense', eventName: e.name })}>
+              <Button className="grow lg:grow-0" onClick={() => openForm({ type: 'expense', eventName: e.name })}>
                 <Plus /> Agregar gasto
               </Button>
             )}
             {single && e.balance < 0 && (
-              <Link to={`/personas/${single.id}/saldar`} className={buttonVariants({ variant: 'glass' })}>
+              <Link to={`/personas/${single.id}/saldar`} className={cn(buttonVariants({ variant: 'glass' }), 'grow lg:grow-0')}>
                 Devolver lo que sobra
               </Link>
             )}

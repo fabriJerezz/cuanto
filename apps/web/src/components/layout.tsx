@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
+import { Navigate, NavLink, Outlet, ScrollRestoration, useLocation } from 'react-router'
 import { Toaster } from '@/components/toast'
 import { useApi, type Account } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -77,16 +77,17 @@ function Sidebar() {
 function TabBar() {
   const openForm = useMovementForm()
   const item = ({ isActive }: { isActive: boolean }) =>
-    cn('press flex size-12 items-center justify-center rounded-full', isActive ? 'bg-brand/14 text-brand' : 'text-muted-foreground')
+    cn('press flex h-[50px] w-20 flex-col items-center justify-center rounded-[25px] text-[11px] font-bold', isActive ? 'bg-brand/14 text-brand' : 'text-muted-foreground')
   const [home, payments] = NAV
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 px-5 pb-[max(16px,env(safe-area-inset-bottom))] lg:hidden">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 px-5 pb-[max(14px,env(safe-area-inset-bottom))] lg:hidden">
       <nav
         aria-label="Navegación principal"
-        className="mx-auto flex h-[62px] max-w-md items-center justify-around rounded-[31px] border border-white/90 bg-white/66 px-2 shadow-[0_12px_32px_rgba(20,50,40,0.14)] backdrop-blur-xl backdrop-saturate-170"
+        className="pointer-events-auto mx-auto flex h-[62px] max-w-[340px] items-center justify-between rounded-[31px] border border-white/90 bg-white/72 px-1.5 shadow-[0_12px_32px_rgba(20,50,40,0.16)] backdrop-blur-xl backdrop-saturate-170"
       >
-        <NavLink to={home.to} end aria-label={home.label} className={item}>
-          <Icon name={home.icon} />
+        <NavLink to={home.to} end className={item}>
+          <Icon name={home.icon} size={22} />
+          {home.label}
         </NavLink>
         <button
           type="button"
@@ -96,8 +97,9 @@ function TabBar() {
         >
           <Icon name="plus" />
         </button>
-        <NavLink to={payments.to} aria-label={payments.label} className={item}>
-          <Icon name={payments.icon} />
+        <NavLink to={payments.to} className={item}>
+          <Icon name={payments.icon} size={22} />
+          {payments.label}
         </NavLink>
       </nav>
     </div>
@@ -113,11 +115,13 @@ export function Shell() {
     <MovementFormProvider>
       <div className="flex min-h-dvh">
         <Sidebar />
-        <main key={pathname.split('/')[1]} className="page flex min-w-0 flex-1 flex-col gap-4 px-5 pt-6 pb-28 lg:gap-[22px] lg:px-11 lg:py-8">
+        <main key={pathname.split('/')[1]} className="page flex min-w-0 flex-1 flex-col gap-4 px-(--gutter) pt-[max(1rem,env(safe-area-inset-top))] pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:gap-[22px] lg:py-8">
           <Outlet />
         </main>
         <TabBar />
         <Toaster />
+        {/* By path, so the back chevron (a plain link) also returns to where you were in the list. */}
+        <ScrollRestoration getKey={(location) => location.pathname} />
       </div>
     </MovementFormProvider>
   )

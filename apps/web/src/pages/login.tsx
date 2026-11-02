@@ -9,7 +9,7 @@ function Login() {
   const [pin, setPin] = useState('')
   const login = useSave(() => api.post('/auth/login', { pin }))
   return (
-    <div className="flex min-h-dvh items-center justify-center p-5">
+    <div className="flex min-h-dvh items-center justify-center p-[max(1.25rem,env(safe-area-inset-top))]">
       <Glass className="w-full max-w-[360px] rounded-[36px] p-8">
         <form
           className="flex flex-col gap-5"
