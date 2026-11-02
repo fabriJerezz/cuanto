@@ -51,18 +51,18 @@ function DateField({ value, onChange, id, className }: { value: string; onChange
         <Popover.Content
           sideOffset={6}
           collisionPadding={12}
-          className="z-50 w-[296px] origin-(--radix-popover-content-transform-origin) rounded-[22px] border border-white/90 bg-white/85 p-3 shadow-[0_16px_40px_rgba(20,50,40,0.18)] backdrop-blur-2xl backdrop-saturate-170 duration-200 ease-apple outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+          className="z-50 w-[334px] max-[359px]:w-[296px] lg:w-[296px] origin-(--radix-popover-content-transform-origin) rounded-[22px] border border-white/90 bg-white/85 p-3 shadow-[0_16px_40px_rgba(20,50,40,0.18)] backdrop-blur-2xl backdrop-saturate-170 duration-200 ease-apple outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
         >
           <div className="mb-2 flex items-center justify-between">
-            <button type="button" aria-label="Mes anterior" onClick={() => shift(-1)} className="flex size-9 cursor-pointer items-center justify-center rounded-full hover:bg-brand/10">
+            <button type="button" aria-label="Mes anterior" onClick={() => shift(-1)} className="flex size-11 cursor-pointer items-center justify-center rounded-full hover:bg-brand/10 lg:size-9">
               <ChevronLeft className="size-5" strokeWidth={1.75} />
             </button>
-            <div className="text-sm font-bold capitalize">{month.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}</div>
-            <button type="button" aria-label="Mes siguiente" onClick={() => shift(1)} className="flex size-9 cursor-pointer items-center justify-center rounded-full hover:bg-brand/10">
+            <div className="text-sm font-bold first-letter:uppercase">{month.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}</div>
+            <button type="button" aria-label="Mes siguiente" onClick={() => shift(1)} className="flex size-11 cursor-pointer items-center justify-center rounded-full hover:bg-brand/10 lg:size-9">
               <ChevronRight className="size-5" strokeWidth={1.75} />
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-y-1 text-center">
+          <div className="grid grid-cols-7 text-center lg:gap-y-1">
             {WEEK.map((w, i) => (
               <div key={i} className="pb-1 text-xs font-bold text-muted-foreground">
                 {w}
@@ -81,7 +81,7 @@ function DateField({ value, onChange, id, className }: { value: string; onChange
                   aria-pressed={selected}
                   onClick={() => pick(v)}
                   className={cn(
-                    "press mx-auto flex size-9 cursor-pointer items-center justify-center rounded-full text-sm font-semibold",
+                    "press mx-auto flex size-11 cursor-pointer items-center justify-center rounded-full text-sm font-semibold max-[359px]:size-9 lg:size-9",
                     selected ? "bg-foreground text-white" : "hover:bg-brand/10",
                     v === today && !selected && "text-brand ring-1 ring-brand/50"
                   )}
@@ -91,7 +91,7 @@ function DateField({ value, onChange, id, className }: { value: string; onChange
               )
             })}
           </div>
-          <button type="button" onClick={() => pick(today)} className="press mt-2 h-9 w-full cursor-pointer rounded-full text-sm font-bold text-brand hover:bg-brand/10">
+          <button type="button" onClick={() => pick(today)} className="press mt-2 h-11 w-full cursor-pointer lg:h-9 rounded-full text-sm font-bold text-brand hover:bg-brand/10">
             Hoy
           </button>
         </Popover.Content>

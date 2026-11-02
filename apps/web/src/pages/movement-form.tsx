@@ -1,6 +1,6 @@
-import { ArrowRight, Minus, Plus, X } from 'lucide-react'
+import { ArrowRight, Minus, Plus } from 'lucide-react'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { Caption, Chip, Collapse, ErrorText, Glass, Label, Loading, Muted } from '@/components/kit'
+import { Caption, Chip, Collapse, ErrorText, Glass, Label, Loading, Muted, SheetHeader } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DateField } from '@/components/ui/date-field'
@@ -153,12 +153,40 @@ function MovementFields({ initial, type: defaultType, personId, eventName: defau
 
   return (
     <form
-      className="flex flex-col gap-3 [&_[data-slot=input]]:h-11 [&_[data-slot=select-trigger][data-size]]:h-11 [&_button[aria-pressed]:not([aria-label])]:h-9 [&_button[aria-pressed]:not([aria-label])]:px-4"
+      className="flex flex-col gap-3 [&_[data-slot=input]]:h-11 [&_[data-slot=select-trigger][data-size]]:h-11 [&_button[aria-pressed]:not([aria-label])]:h-10 [&_button[aria-pressed]:not([aria-label])]:px-4 lg:[&_button[aria-pressed]:not([aria-label])]:h-9"
       onSubmit={(e) => {
         e.preventDefault()
         if (canSave) submit()
       }}
     >
+      <div className="flex gap-2">
+          {TYPES.map((t) => {
+            const on = type === t.type
+            const gold = on && t.type === 'income' && others
+            return (
+              <button
+                key={t.type}
+                type="button"
+                aria-label={t.label}
+                aria-pressed={on}
+                tabIndex={-1}
+                onClick={() => {
+                  setType(t.type)
+                  setRelation(null)
+                }}
+                className={cn(
+                  'flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border text-[13px] font-bold backdrop-blur-lg max-[359px]:[&>svg]:hidden',
+                  gold ? 'border-[#F2C230]/40 bg-[#F2C230]/15 text-others' : on ? t.on : 'border-white/70 bg-white/22',
+                  !gold && t.fg,
+                )}
+              >
+                <t.icon className="size-[18px]" strokeWidth={2} />
+                {t.short}
+              </button>
+            )
+          })}
+      </div>
+
       <Glass className="px-5 py-2.5">
         <label htmlFor="monto" className="sr-only">
           Monto
@@ -189,32 +217,9 @@ function MovementFields({ initial, type: defaultType, personId, eventName: defau
         </div>
       </Glass>
 
-      <div className="flex gap-2">
-          {TYPES.map((t) => {
-            const on = type === t.type
-            const gold = on && t.type === 'income' && others
-            return (
-              <button
-                key={t.type}
-                type="button"
-                aria-label={t.label}
-                aria-pressed={on}
-                tabIndex={-1}
-                onClick={() => {
-                  setType(t.type)
-                  setRelation(null)
-                }}
-                className={cn(
-                  'flex h-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border text-[13px] font-bold backdrop-blur-lg',
-                  gold ? 'border-[#F2C230]/40 bg-[#F2C230]/15 text-others' : on ? t.on : 'border-white/70 bg-white/22',
-                  !gold && t.fg,
-                )}
-              >
-                <t.icon className="size-[18px]" strokeWidth={2} />
-                {t.short}
-              </button>
-            )
-          })}
+      <div>
+        <Label htmlFor="descripcion">Descripción (opcional)</Label>
+        <Input id="descripcion" placeholder="Ej: Supermercado" value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
 
       <div>
@@ -353,10 +358,6 @@ function MovementFields({ initial, type: defaultType, personId, eventName: defau
       </Collapse>
 
       <div>
-        <Label htmlFor="descripcion">Descripción (opcional)</Label>
-        <Input id="descripcion" placeholder="Ej: Supermercado" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </div>
-      <div>
         <Label htmlFor="fecha">Fecha</Label>
         <DateField id="fecha" value={date} onChange={setDate} />
       </div>
@@ -367,7 +368,7 @@ function MovementFields({ initial, type: defaultType, personId, eventName: defau
 
       <ErrorText error={save.error} />
 
-      <div className="sticky bottom-0 -mx-1 bg-linear-to-b from-[#EEF3F0]/0 to-[#EEF3F0] to-40% px-1 pt-4 pb-0.5">
+      <div className="sticky bottom-0 -mx-1 bg-linear-to-b from-[#EEF3F0]/0 to-[#EEF3F0] to-40% px-1 pt-4 pb-(--sheet-pb) lg:pb-0.5">
         <Button type="submit" disabled={!canSave || save.isPending} className="w-full shadow-[0_10px_24px_rgba(16,32,27,0.25)]">
           {save.isPending ? 'Guardando…' : 'Guardar'}
         </Button>
@@ -428,9 +429,10 @@ export function MovementFormProvider({ children }: { children: ReactNode }) {
           <section
             role="dialog"
             aria-label={opts.initial ? 'Editar movimiento' : 'Nuevo movimiento'}
+            data-state={visible ? 'open' : 'closed'}
             onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === 'opacity' && !visible && setMounted(false)}
             className={cn(
-              'fixed inset-x-0 bottom-0 z-40 grid rounded-t-[32px] border border-white/85 bg-[#EEF3F0]/95 shadow-[0_-12px_40px_rgba(20,50,40,0.18)] backdrop-blur-2xl origin-bottom lg:inset-x-auto lg:top-6 lg:right-6 lg:bottom-auto lg:w-[420px] lg:rounded-[36px] lg:origin-top lg:shadow-[0_22px_54px_rgba(15,60,50,0.22)]',
+              'sheet grid border border-white/85 bg-[#EEF3F0]/95 shadow-[0_-12px_40px_rgba(20,50,40,0.18)] backdrop-blur-2xl origin-bottom lg:fixed lg:top-6 lg:right-6 lg:z-40 lg:w-[420px] lg:rounded-[36px] lg:origin-top lg:shadow-[0_22px_54px_rgba(15,60,50,0.22)]',
               shown ? 'grid-rows-[1fr] opacity-100 [--fold:0deg]' : 'grid-rows-[0fr] opacity-0 [--fold:60deg] lg:[--fold:-60deg]',
             )}
             style={{
@@ -438,18 +440,13 @@ export function MovementFormProvider({ children }: { children: ReactNode }) {
               scale: shown ? 1 : 0.96,
               // Folds like a flap: height and tilt ease in, the fade overlaps the last stretch so no 2px border line is left at zero height.
               transition: shown
-                ? 'grid-template-rows 300ms var(--ease-apple), transform 300ms var(--ease-apple), scale 300ms var(--ease-apple), opacity 200ms var(--ease-apple)'
+                ? 'grid-template-rows 300ms var(--ease-apple), transform 300ms var(--ease-apple), scale 300ms var(--ease-apple), opacity 200ms var(--ease-apple), bottom 200ms var(--ease-apple)'
                 : 'grid-template-rows 210ms cubic-bezier(0.4, 0, 0.6, 1), transform 210ms cubic-bezier(0.4, 0, 0.6, 1), scale 210ms cubic-bezier(0.4, 0, 0.6, 1), opacity 120ms ease-in 90ms',
             }}
           >
-            <div inert={!shown} className="flex max-h-[92dvh] min-h-0 flex-col overflow-hidden lg:max-h-[calc(100dvh-3rem)]">
-              <div className="flex shrink-0 items-center justify-between px-6 pt-4 pb-1 lg:px-7 lg:pt-5">
-                <h2 className="text-base font-bold">{opts.initial ? 'Editar movimiento' : 'Nuevo movimiento'}</h2>
-                <button type="button" aria-label="Cerrar" onClick={close} className="-mr-2.5 flex size-11 cursor-pointer items-center justify-center">
-                  <X className="size-6" strokeWidth={1.75} />
-                </button>
-              </div>
-              <div className={cn('min-h-0 px-6 pb-[max(20px,env(safe-area-inset-bottom))] lg:px-7 lg:pb-5', shown ? 'overflow-y-auto' : 'overflow-y-hidden')}>
+            <div inert={!shown} className="flex max-h-(--sheet-max) min-h-0 flex-col overflow-hidden lg:max-h-[calc(100dvh-3rem)]">
+              <SheetHeader title={opts.initial ? 'Editar movimiento' : 'Nuevo movimiento'} onClose={close} className="px-5 pt-1 pb-1 lg:px-7 lg:pt-5" />
+              <div className={cn('min-h-0 overscroll-contain px-5 lg:px-7 lg:pb-5', shown ? 'overflow-y-auto' : 'overflow-y-hidden')}>
                 <MovementFields key={key} {...opts} onSaved={close} />
               </div>
             </div>

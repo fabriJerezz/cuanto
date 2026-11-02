@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Collapse, ErrorText, Glass, Loading, useShortcut } from '@/components/kit'
+import { Amount, Collapse, ErrorText, Glass, Loading, useShortcut } from '@/components/kit'
 import { Icon } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { useApi, type Summary } from '@/lib/api'
-import { currentMonth, longToday, money } from '@/lib/format'
+import { currentMonth, longToday, money, signed } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useMovementForm } from './movement-form'
 import { MovementsTable } from './movements'
@@ -154,12 +154,9 @@ export default function Home() {
       </div>
 
       <div className="flex flex-wrap items-start gap-4 lg:gap-[22px]">
-        <div className="hero min-w-0 flex-[3_1_420px] rounded-[32px] px-[26px] pt-7 pb-[22px] lg:rounded-[36px] lg:px-10 lg:pt-9 lg:pb-[30px]">
+        <div className="hero min-w-0 flex-[3_1_420px] rounded-[32px] px-6 pt-6 pb-[22px] lg:rounded-[36px] lg:px-10 lg:pt-9 lg:pb-[30px]">
           <div className="text-sm font-semibold text-brand-soft lg:text-[15px]">Plata libre real</div>
-          <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em] lg:text-[64px] lg:leading-[76px]">
-            {s.free < 0 && '− '}
-            {money(s.free)}
-          </div>
+          <Amount className="[--max:52px] lg:[--max:64px]">{signed(s.free)}</Amount>
           <div className="text-sm text-brand-soft lg:text-[15px]">
             {s.free < 0 ? `Es lo que te falta para cubrir los pagos pendientes · tenés ${money(s.totalInAccounts)} en tus cuentas` : `de ${money(s.totalInAccounts)} en tus cuentas`}
           </div>
@@ -167,7 +164,7 @@ export default function Home() {
             type="button"
             aria-expanded={open}
             onClick={() => setOpen(!open)}
-            className="mt-5 h-11 cursor-pointer rounded-full border border-white/35 bg-white/14 px-5 text-sm font-semibold lg:mt-7"
+            className="mt-4 h-11 cursor-pointer rounded-full border border-white/35 bg-white/14 px-5 text-sm font-semibold lg:mt-7"
           >
             {open ? 'Ocultar composición' : 'Ver composición'}
           </button>

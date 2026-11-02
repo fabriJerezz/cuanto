@@ -26,7 +26,7 @@ export function Toaster() {
       role="status"
       aria-live="polite"
       className={cn(
-        'pointer-events-none fixed inset-x-0 bottom-28 z-[60] flex justify-center px-5 transition-[opacity,translate] duration-300 ease-apple lg:bottom-8',
+        'pointer-events-none fixed inset-x-0 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[60] flex justify-center px-5 transition-[opacity,translate] duration-300 ease-apple lg:bottom-8',
         shown ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
       )}
     >

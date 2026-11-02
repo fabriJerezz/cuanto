@@ -40,6 +40,12 @@ const router = createBrowserRouter([
   },
 ])
 
+// The on-screen keyboard covers fixed elements without resizing them: --kb is its height, for the bottom sheets.
+const viewport = window.visualViewport
+const syncKeyboard = () => document.documentElement.style.setProperty('--kb', `${Math.max(0, innerHeight - viewport!.height - viewport!.offsetTop)}px`)
+viewport?.addEventListener('resize', syncKeyboard)
+viewport?.addEventListener('scroll', syncKeyboard)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

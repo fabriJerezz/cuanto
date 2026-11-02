@@ -1,7 +1,7 @@
 import { CalendarX2 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, NavLink, useParams } from 'react-router'
-import { BackTitle, Bar, Caption, Chip, ErrorText, Glass, Label, Loading, Muted, PageTitle, Segmented, Tab, Collapse, segmentClass, tabClass } from '@/components/kit'
+import { Link, NavLink, useNavigate, useParams } from 'react-router'
+import { Amount, BackTitle, Bar, Caption, Chip, ErrorText, Glass, Label, Loading, Muted, PageTitle, Tab, TabStrip, Collapse, tabClass } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Input } from '@/components/ui/input'
@@ -88,7 +88,7 @@ export function PaymentRow({ p, onToggle, busy }: { p: Payment; onToggle: () => 
       >
         <Check done={false} />
       </button>
-      <Link to={payUrl(p)} className="min-w-0 flex-1">
+      <Link to={payUrl(p)} className="min-w-0 flex-1 pr-2">
         <div className="text-[15px] font-semibold">{p.name}</div>
         <div className={cn('text-xs', TONE[due.tone].sub)}>{due.label}</div>
       </Link>
@@ -125,7 +125,7 @@ export function MonthRow({ p, onToggle, busy }: { p: Payment; onToggle: () => vo
           />
         </svg>
       </button>
-      <Link to={payUrl(p)} className="min-w-0 flex-1">
+      <Link to={payUrl(p)} className="min-w-0 flex-1 pr-2">
         <div className={cn('relative w-fit max-w-full text-[15px] font-semibold transition-colors duration-500 ease-apple', p.paid && 'text-muted-foreground')}>
           {p.name}
           <span
@@ -170,11 +170,11 @@ function AddOneOff() {
 
   return (
     <div>
-      <Button variant="glass" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Button variant="glass" className="w-full lg:w-auto lg:self-start" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? 'Cancelar' : 'Agregar pago de este mes'}
       </Button>
       <Collapse open={open}>
-        <Glass className="mt-3 flex flex-col gap-3 p-5">
+        <Glass className="mt-3 flex flex-col gap-3 p-[22px]">
           <div>
             <Label htmlFor="op-name">Nombre</Label>
             <Input id="op-name" placeholder="Ej: Regalo de cumpleaños" value={name} onChange={(e) => setName(e.target.value)} />
@@ -202,7 +202,7 @@ function AddOneOff() {
           <ShortNote accountId={acc?.id} amount={n} />
           <ErrorText error={save.error} />
           <Button
-            className="self-start"
+            className="w-full lg:w-auto lg:self-start"
             disabled={!ready || save.isPending}
             onClick={() =>
               save.mutate(undefined, {
@@ -233,7 +233,7 @@ function PaymentsList({ s }: { s: Summary }) {
     <div className="flex flex-col gap-4">
       <div className="px-1 pt-1">
         <div className="text-sm font-semibold text-muted-foreground">Te falta pagar</div>
-        <div className="num text-[40px] font-bold tracking-[-0.03em]">{money(s.pendingTotal)}</div>
+        <Amount className="[--max:40px]">{money(s.pendingTotal)}</Amount>
       </div>
       {s.payments.length === 0 && (
         <Muted className="px-1">
@@ -279,10 +279,8 @@ function Budgets({ s }: { s: Summary }) {
     <div className="flex flex-col gap-4">
       <div className="px-1 pt-1">
         <div className="text-sm font-semibold text-muted-foreground">Gastado en el mes</div>
-        <div className="flex items-baseline gap-2">
-          <div className="num text-[40px] font-bold tracking-[-0.03em]">{money(s.budgetSpent)}</div>
-          <div className="num text-sm text-muted-foreground">de {money(s.budgetLimit)}</div>
-        </div>
+        <Amount className="[--max:40px]">{money(s.budgetSpent)}</Amount>
+        <div className="num text-sm text-muted-foreground">de {money(s.budgetLimit)}</div>
       </div>
       {s.budgets.length === 0 && (
         <Muted className="px-1">
@@ -329,29 +327,24 @@ export default function Payments({ tab }: { tab: 'pagos' | 'presupuestos' | keyo
   return (
     <>
       <PageTitle>{monthName(s.month)}</PageTitle>
-      <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
-        <NavLink to="/pagos" end={false} className={() => tabClass(tab === 'pagos' || tab === 'presupuestos')}>
+      {/* From lg Gastos already shows the budgets next to it, so Presupuestos is a tab only on phones. */}
+      <TabStrip>
+        <NavLink to="/pagos" end className={() => cn(tabClass(tab === 'pagos'), tab === 'presupuestos' && 'lg:border-foreground lg:bg-foreground lg:font-bold lg:text-white')}>
           Gastos
+        </NavLink>
+        <NavLink to="/pagos/presupuestos" className={cn(tabClass(tab === 'presupuestos'), 'lg:hidden')}>
+          Presupuestos
         </NavLink>
         {(Object.keys(MANAGE) as (keyof typeof MANAGE)[]).map((k) => (
           <NavLink key={k} to={`/pagos/${k}`} className={() => tabClass(tab === k)}>
             {MANAGE[k]}
           </NavLink>
         ))}
-      </div>
+      </TabStrip>
       {tab in MANAGE ? (
         <Manager key={tab} sectionId={SECTION_OF[tab as keyof typeof MANAGE]} />
       ) : (
-        <>
-        <Segmented className="lg:hidden">
-          <NavLink to="/pagos" end className={({ isActive }) => segmentClass(isActive)}>
-            Gastos
-          </NavLink>
-          <NavLink to="/pagos/presupuestos" className={({ isActive }) => segmentClass(isActive)}>
-            Presupuestos
-          </NavLink>
-        </Segmented>
-        <div className="flex flex-wrap items-start gap-7">
+        <div className="flex flex-wrap items-start gap-4 lg:gap-7">
           <div className={cn('min-w-0 flex-[1_1_380px]', tab !== 'pagos' && 'hidden lg:block')}>
             <PaymentsList s={s} />
             <div className="mt-9 flex flex-col gap-4">
@@ -363,7 +356,6 @@ export default function Payments({ tab }: { tab: 'pagos' | 'presupuestos' | keyo
             <Budgets s={s} />
           </div>
         </div>
-        </>
       )}
     </>
   )
@@ -377,6 +369,8 @@ export function Pay() {
   const [amount, setAmount] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const save = useSave((body: object) => api.post('/movements', body))
+  const navigate = useNavigate()
+  const skip = useSave(() => api.put(`/fixed-expenses/${id}/skip/${currentMonth()}`))
   if (!s || !accounts) return <Loading />
 
   const card = kind === 'tarjeta'
@@ -408,13 +402,13 @@ export function Pay() {
       <BackTitle to="/pagos" label="Gastos">
         {p.name}
       </BackTitle>
-      <div className="flex flex-wrap items-start gap-7">
-        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-7 lg:rounded-[36px] lg:p-8">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
+        <Glass className="flex min-w-0 flex-[3_1_420px] flex-col gap-5 p-[22px] lg:rounded-[36px] lg:p-8">
           <div>
             <div className="text-sm font-semibold text-muted-foreground">
               {p.name} · vence el {shortDate(p.dueDate)}
             </div>
-            <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em]">{money(p.amount)}</div>
+            <Amount>{money(p.amount)}</Amount>
           </div>
           <div>
             <Caption>Pagar con</Caption>
@@ -432,21 +426,29 @@ export function Pay() {
             </label>
             <Input id="pg-monto" inputMode="numeric" disabled={paid} value={`$ ${amount ?? moneyInput(String(p.amount))}`} onChange={(e) => setAmount(moneyInput(e.target.value))} />
           </div>
-          <ErrorText error={save.error} />
-          <Button className="self-start" disabled={paid || !n || save.isPending} onClick={confirm}>
-            {paid ? 'Pagado' : 'Confirmar pago'}
-          </Button>
+          <ErrorText error={save.error ?? skip.error} />
+          <div className="flex flex-wrap gap-2.5">
+            <Button className="grow lg:grow-0" disabled={paid || !n || save.isPending} onClick={confirm}>
+              {paid ? 'Pagado' : 'Confirmar pago'}
+            </Button>
+            {/* The touch-friendly way to the "Este mes no" that lists offer on long-press. */}
+            {!card && !paid && !p.skipped && (
+              <Button variant="glass" className="grow lg:grow-0" disabled={skip.isPending} onClick={() => skip.mutate(undefined, { onSuccess: () => navigate('/pagos') })}>
+                Este mes no
+              </Button>
+            )}
+          </div>
         </Glass>
-        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-7 lg:rounded-[36px]">
+        <Glass soft className="flex min-w-0 flex-[2_1_300px] flex-col gap-1.5 p-[22px] lg:rounded-[36px] lg:p-7">
           <div className="text-[15px] font-bold">Cómo queda</div>
           <Muted className="mt-2">{acc.name}</Muted>
-          <div className="num text-2xl font-bold">
+          <div className="num text-xl font-bold lg:text-2xl">
             {signed(acc.balance)} <span className="text-muted-foreground">→</span> {signed(accAfter)}
           </div>
           {card && (
             <>
               <Muted className="mt-2">Deuda de tarjeta</Muted>
-              <div className="num text-2xl font-bold">
+              <div className="num text-xl font-bold lg:text-2xl">
                 {money(p.amount)} <span className="text-muted-foreground">→</span> <span className="text-brand">{money(Math.max(0, p.amount - n))}</span>
               </div>
             </>
@@ -483,18 +485,18 @@ export function CategoryPage() {
       <BackTitle to="/pagos/presupuestos" label="Gastos y presupuestos" />
       <PageTitle
         action={
-          <Button variant="glass" onClick={startEdit}>
+          <Button variant="glass" size="sm" className="lg:h-[52px] lg:px-7 lg:font-bold" onClick={startEdit}>
             {editing ? 'Cancelar' : 'Editar tope'}
           </Button>
         }
       >
         {c.name}
       </PageTitle>
-      <div className="flex flex-wrap items-start gap-7">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
         <div className="flex min-w-0 flex-[2_1_340px] flex-col gap-3.5">
           <Glass className="px-[26px] py-6 lg:rounded-[36px] lg:px-8 lg:py-7">
             <div className="text-sm font-semibold text-muted-foreground">Gastado este mes</div>
-            <div className="num text-5xl leading-[58px] font-bold tracking-[-0.03em]">{money(c.spent)}</div>
+            <Amount>{money(c.spent)}</Amount>
             <Muted className="num">
               de {money(c.monthlyLimit)} · {left < 0 ? 'te pasaste' : 'quedan'} <b className={pct >= 85 ? 'text-owe-strong' : 'text-foreground'}>{money(left)}</b>
             </Muted>
@@ -509,7 +511,7 @@ export function CategoryPage() {
                 <Input id="ct-tope" inputMode="numeric" value={`$ ${limit}`} onChange={(e) => setLimit(moneyInput(e.target.value))} />
               </div>
               <ErrorText error={save.error} />
-              <Button className="self-start" disabled={save.isPending} onClick={() => save.mutate(parseMoney(limit), { onSuccess: () => setEditing(false) })}>
+              <Button className="w-full lg:w-auto lg:self-start" disabled={save.isPending} onClick={() => save.mutate(parseMoney(limit), { onSuccess: () => setEditing(false) })}>
                 Guardar
               </Button>
             </Glass>

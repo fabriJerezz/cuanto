@@ -1,8 +1,9 @@
 import type { AccountType, Movement, Person, Relation } from './api'
 
-export const money = (n: number) => `$ ${Math.abs(n).toLocaleString('es-AR')}`
+// Non-breaking space: an amount never wraps between the $ and the digits.
+export const money = (n: number) => `$\u00A0${Math.abs(n).toLocaleString('es-AR')}`
 // Account balances can go below zero; owed amounts use money() and say the direction in words.
-export const signed = (n: number) => (n < 0 ? `− ${money(n)}` : money(n))
+export const signed = (n: number) => (n < 0 ? `−\u00A0${money(n)}` : money(n))
 
 // Parses "25.000" / "$ 25.000" into 25000.
 export const parseMoney = (s: string) => Number(s.replace(/\D/g, '')) || 0
@@ -111,7 +112,7 @@ export function movementSub(m: Movement) {
 }
 
 export const signedMoney = (m: Pick<Movement, 'type' | 'amount'>) =>
-  m.type === 'income' ? `+ ${money(m.amount)}` : m.type === 'expense' ? `− ${money(m.amount)}` : money(m.amount)
+  m.type === 'income' ? `+\u00A0${money(m.amount)}` : m.type === 'expense' ? `−\u00A0${money(m.amount)}` : money(m.amount)
 
 // Upcoming payments: overdue ones stand out, the next few days get a light accent.
 export function dueState(dueDate: string) {

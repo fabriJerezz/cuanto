@@ -1,7 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { BackTitle, Glass, Loading, Muted, Row, Segmented, segmentClass } from '@/components/kit'
+import { Amount, BackTitle, Glass, Loading, Muted, Row, Segmented, segmentClass } from '@/components/kit'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { api, useApi, useSave, type Movement } from '@/lib/api'
@@ -23,10 +23,10 @@ export function MovementRows<M extends Movement>({ movements, empty = 'No hay mo
     const part = amountOf?.(m)
     const shown = part != null && part !== m.amount
     return (
-      <Link key={m.id} to={`/movimientos/${m.id}`} className="flex min-h-15 items-center gap-3 border-line [&+&]:border-t">
+      <Link key={m.id} to={`/movimientos/${m.id}`} className="tap flex min-h-15 items-center gap-3 border-line py-2 [&+&]:border-t">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold">{movementTitle(m)}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="truncate text-xs text-muted-foreground">
             {dateTimeLabel(m.date).split(',')[0]} · {shown ? `parte de ${money(m.amount)}` : movementSub(m)}
           </div>
         </div>
@@ -68,7 +68,7 @@ export function MovementsTable({ className }: { className?: string }) {
                 setFilter(id)
                 setShown(PAGE)
               }}
-              className={cn(segmentClass(filter === id), 'h-9 px-4')}
+              className={cn(segmentClass(filter === id), 'h-9 px-2 sm:px-4')}
             >
               {label}
             </button>
@@ -86,10 +86,10 @@ export function MovementsTable({ className }: { className?: string }) {
             {showGroup && <div className="pt-4 pb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">{group}</div>}
             <ContextMenu>
               <ContextMenuTrigger asChild>
-                <Link to={`/movimientos/${m.id}`} className={cn('flex min-h-15 items-center gap-3 lg:min-h-16', !showGroup && 'border-t border-line')}>
+                <Link to={`/movimientos/${m.id}`} className={cn('tap flex min-h-15 items-center gap-3 py-2 lg:min-h-16', !showGroup && 'border-t border-line')}>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[15px] font-semibold">{movementTitle(m)}</div>
-                    <div className="text-xs text-muted-foreground">{movementSub(m)}</div>
+                    <div className="truncate text-xs text-muted-foreground">{movementSub(m)}</div>
                   </div>
                   <div className={cn('num text-[15px] font-bold', amountColor(m))}>{signedMoney(m)}</div>
                 </Link>
@@ -143,20 +143,18 @@ export function MovementDetail() {
       <BackTitle to="/" label="Inicio">
         Movimiento
       </BackTitle>
-      <div className="flex flex-wrap items-start gap-7">
+      <div className="flex flex-wrap items-start gap-4 lg:gap-7">
         <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-[18px]">
           <Glass className="px-[26px] py-7 lg:rounded-[36px] lg:px-9 lg:py-8">
             <div className="text-sm font-semibold text-muted-foreground">{[kind, tag].filter(Boolean).join(' · ')}</div>
-            <div className={cn('num text-5xl leading-[58px] font-bold tracking-[-0.03em] lg:text-[56px] lg:leading-[66px]', amountColor(shown))}>
-              {signedMoney(shown)}
-            </div>
+            <Amount className={cn('lg:[--max:56px]', amountColor(shown))}>{signedMoney(shown)}</Amount>
             <div className="text-[15px] text-muted-foreground">{movementTitle(shown)}</div>
           </Glass>
-          <Glass className="px-7 py-1">
+          <Glass className="px-[22px] py-1 lg:px-7">
             {fields.map(([k, v]) => (
               <Row key={k}>
-                <div className="flex-1 text-sm text-muted-foreground">{k}</div>
-                <div className="text-right text-[15px] font-semibold">{v}</div>
+                <div className="shrink-0 text-sm text-muted-foreground">{k}</div>
+                <div className="min-w-0 flex-1 py-2 text-right text-[15px] font-semibold">{v}</div>
               </Row>
             ))}
           </Glass>
@@ -175,19 +173,21 @@ export function MovementDetail() {
             <Glass className="px-6 py-[22px]">
               <div className="text-[15px] font-bold">¿Eliminar este movimiento?</div>
               <Muted className="mt-1 text-[13px] leading-[19px]">{willUndo}. No se puede deshacer.</Muted>
-              <div className="mt-4 flex gap-2.5">
-                <Button variant="danger" className="h-12" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => setDeleted(m!) })}>
+              <div className="mt-4 flex flex-wrap gap-2.5">
+                <Button variant="danger" className="h-12 grow" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => setDeleted(m!) })}>
                   Sí, eliminar
                 </Button>
-                <Button variant="glass" className="h-12" onClick={() => setConfirm(false)}>
+                <Button variant="glass" className="h-12 grow" onClick={() => setConfirm(false)}>
                   Cancelar
                 </Button>
               </div>
             </Glass>
           ) : (
             <div className="flex flex-wrap gap-2.5">
-              <Button onClick={() => openForm({ initial: m })}>Editar</Button>
-              <Button variant="glass" className="text-danger" onClick={() => setConfirm(true)}>
+              <Button className="grow lg:grow-0" onClick={() => openForm({ initial: m })}>
+                Editar
+              </Button>
+              <Button variant="glass" className="grow text-danger lg:grow-0" onClick={() => setConfirm(true)}>
                 Eliminar
               </Button>
             </div>

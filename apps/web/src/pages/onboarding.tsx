@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
-import { ErrorText, Glass, Label } from '@/components/kit'
+import { Amount, ErrorText, Glass, Label } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api, queryClient, useApi, type Account, type Summary } from '@/lib/api'
@@ -75,8 +75,8 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center p-5">
-      <Glass className="flex w-full max-w-[520px] flex-col gap-6 rounded-[36px] p-8 lg:p-10">
+    <div className="flex min-h-dvh items-center justify-center p-[max(1.25rem,env(safe-area-inset-top))]">
+      <Glass className="flex w-full max-w-[520px] flex-col gap-6 rounded-[32px] p-6 sm:p-8 lg:rounded-[36px] lg:p-10">
         <div className="flex gap-1.5">
           {STEPS.map((_, i) => (
             <div key={i} className={cn('h-1.5 flex-1 rounded-full', i <= step ? 'bg-brand' : 'bg-foreground/10')} />
@@ -111,16 +111,16 @@ export default function Onboarding() {
         {step === 2 && free !== null && (
           <div className="hero rounded-[28px] px-6 py-5">
             <div className="text-sm font-semibold text-brand-soft">Plata libre real</div>
-            <div className="num text-[40px] font-bold tracking-[-0.03em]">{money(free)}</div>
+            <Amount className="[--max:40px]">{money(free)}</Amount>
           </div>
         )}
         <ErrorText error={error} />
         <div className="flex justify-between gap-2.5">
-          <Button variant="glass" className={cn(step === 0 && 'invisible')} onClick={() => setStep(Math.max(0, step - 1))}>
+          <Button variant="glass" className={cn('px-5 sm:px-7', step === 0 && 'invisible')} onClick={() => setStep(Math.max(0, step - 1))}>
             Atrás
           </Button>
           {step < 2 ? (
-            <Button disabled={busy} onClick={next}>
+            <Button className="px-5 sm:px-7" disabled={busy} onClick={next}>
               Continuar
             </Button>
           ) : (
