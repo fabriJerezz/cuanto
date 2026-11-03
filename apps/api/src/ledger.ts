@@ -178,11 +178,10 @@ export function summarize({ month, accounts, people, events, categories, fixedEx
   const positive = money.reduce((s, a) => s + Math.max(0, bal.get(a.id)!), 0);
 
   const eventById = new Map(events.map((e) => [e.id, e]));
-  const ownSpend = (categoryId: number) =>
-    inMonth
-      .filter((m) => m.type === 'expense' && !m.isOthers && m.categoryId === categoryId)
-      .reduce((s, m) => s + myShare(m, m.eventId == null ? undefined : eventById.get(m.eventId)), 0);
-  const budgets = categories.map((c) => ({ id: c.id, name: c.name, limit: c.monthlyLimit, spent: ownSpend(c.id) }));
+  // Yours only: never others' money, and only your part of a shared event expense.
+  const ownExpenses = inMonth.filter((m) => m.type === 'expense' && !m.isOthers);
+  const ownSpend = (list: Movement[]) => list.reduce((s, m) => s + myShare(m, m.eventId == null ? undefined : eventById.get(m.eventId)), 0);
+  const budgets = categories.map((c) => ({ id: c.id, name: c.name, limit: c.monthlyLimit, spent: ownSpend(ownExpenses.filter((m) => m.categoryId === c.id)) }));
 
   // Split each account's money into what's free, set aside for pending payments and other people's.
   // What you owe (`owe`, the same number as "Debés") is spread over the accounts by where that money
@@ -219,6 +218,8 @@ export function summarize({ month, accounts, people, events, categories, fixedEx
     free,
     totalInAccounts,
     cardDebt,
+    income: inMonth.filter((m) => m.type === 'income' && !m.isOthers).reduce((s, m) => s + m.amount, 0),
+    expense: ownSpend(ownExpenses),
     accounts: accounts.map((a) => ({
       id: a.id,
       name: a.name,

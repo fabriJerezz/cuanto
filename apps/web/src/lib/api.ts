@@ -97,6 +97,8 @@ export interface Summary {
   free: number
   totalInAccounts: number
   cardDebt: number
+  income: number
+  expense: number
   accounts: { id: number; name: string; type: AccountType; balance: number; pct: number | null; split: { free: number; pending: number; others: number } | null }[]
   owners: { free: number; pending: number; others: number; freePct: number; pendingPct: number; othersPct: number }
   payments: Payment[]
