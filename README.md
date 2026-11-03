@@ -11,7 +11,7 @@ Monorepo con pnpm workspaces:
 
 ```sh
 pnpm install
-pnpm dev        # api en :3000, web en :5173 (hace proxy de /api)
+pnpm dev        # api en :3100, web en :5173 (hace proxy de /api)
 pnpm test       # tests e2e de la api (SQLite en memoria)
 pnpm build
 ```

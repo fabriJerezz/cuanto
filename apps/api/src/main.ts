@@ -16,5 +16,5 @@ if (process.env.NODE_ENV !== 'test') {
   } catch {}
   const app = await NestFactory.create(AppModule);
   configure(app);
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3100);
 }
