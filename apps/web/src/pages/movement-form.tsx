@@ -397,10 +397,13 @@ export function MovementFormProvider({ children }: { children: ReactNode }) {
     setMounted(true)
     setVisible(true)
   }
-  const close = () => setVisible(false)
+  const close = () => {
+    setVisible(false)
+    setShown(false)
+  }
 
   useEffect(() => {
-    if (!visible) return setShown(false)
+    if (!visible) return
     const id = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)))
     return () => cancelAnimationFrame(id)
   }, [visible])

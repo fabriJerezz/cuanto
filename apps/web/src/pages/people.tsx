@@ -397,7 +397,7 @@ export function ReceiveReturn() {
                   type: 'income',
                   amount,
                   date: localDateTime(),
-                  accountId: acc!.id,
+                  accountId: acc.id,
                   isOthers: true,
                   personId: who!.id,
                   relation: 'returned_to_me',

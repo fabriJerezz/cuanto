@@ -113,6 +113,30 @@ function Composition({ title, rows: all, note }: { title: string; rows: Row[]; n
   )
 }
 
+function MonthBalance({ income, expense }: { income: number; expense: number }) {
+  const diff = income - expense
+  return (
+    <Glass className="px-[22px] py-4 max-lg:order-1 lg:rounded-[36px] lg:px-7 lg:py-6">
+      <div className="text-sm font-bold lg:text-[15px]">Balance del mes</div>
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-[13px] font-semibold text-muted-foreground lg:grid-cols-3">
+        <div>
+          Ingresos
+          <Amount className="text-income [--max:24px] lg:[--max:28px]">{money(income)}</Amount>
+        </div>
+        <div>
+          Egresos
+          <Amount className="text-foreground [--max:24px] lg:[--max:28px]">{money(expense)}</Amount>
+        </div>
+        <div className="col-span-2 border-t border-line pt-3 lg:col-span-1 lg:border-0 lg:pt-0">
+          Diferencia
+          <Amount className={cn('[--max:32px] lg:[--max:28px]', diff < 0 ? 'text-owe' : diff > 0 ? 'text-income' : 'text-foreground')}>{signed(diff)}</Amount>
+        </div>
+      </div>
+      <div className="mt-2 text-xs leading-[17px] text-muted-foreground">Sin transferencias ni plata de otras personas.</div>
+    </Glass>
+  )
+}
+
 export default function Home() {
   const [open, setOpen] = useState(false)
   const openForm = useMovementForm()
@@ -153,21 +177,25 @@ export default function Home() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-start gap-4 lg:gap-[22px]">
-        <div className="hero min-w-0 flex-[3_1_420px] rounded-[32px] px-6 pt-6 pb-[22px] lg:rounded-[36px] lg:px-10 lg:pt-9 lg:pb-[30px]">
-          <div className="text-sm font-semibold text-brand-soft lg:text-[15px]">Plata libre real</div>
-          <Amount className="[--max:52px] lg:[--max:64px]">{signed(s.free)}</Amount>
-          <div className="text-sm text-brand-soft lg:text-[15px]">
-            {s.free < 0 ? `Es lo que te falta para cubrir los pagos pendientes · tenés ${money(s.totalInAccounts)} en tus cuentas` : `de ${money(s.totalInAccounts)} en tus cuentas`}
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:gap-[22px]">
+        {/* Desktop: the balance sits under the hero. Phone: the composition opens right under the hero, above the balance. */}
+        <div className="contents lg:flex lg:min-w-0 lg:flex-[3_1_420px] lg:flex-col lg:gap-[22px]">
+          <div className="hero min-w-0 rounded-[32px] px-6 pt-6 pb-[22px] lg:rounded-[36px] lg:px-10 lg:pt-9 lg:pb-[30px]">
+            <div className="text-sm font-semibold text-brand-soft lg:text-[15px]">Plata libre real</div>
+            <Amount className="[--max:52px] lg:[--max:64px]">{signed(s.free)}</Amount>
+            <div className="text-sm text-brand-soft lg:text-[15px]">
+              {s.free < 0 ? `Es lo que te falta para cubrir los pagos pendientes · tenés ${money(s.totalInAccounts)} en tus cuentas` : `de ${money(s.totalInAccounts)} en tus cuentas`}
+            </div>
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpen(!open)}
+              className="mt-4 h-11 cursor-pointer rounded-full border border-white/35 bg-white/14 px-5 text-sm font-semibold lg:mt-7"
+            >
+              {open ? 'Ocultar composición' : 'Ver composición'}
+            </button>
           </div>
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-            className="mt-4 h-11 cursor-pointer rounded-full border border-white/35 bg-white/14 px-5 text-sm font-semibold lg:mt-7"
-          >
-            {open ? 'Ocultar composición' : 'Ver composición'}
-          </button>
+          <MonthBalance income={s.income} expense={s.expense} />
         </div>
 
         <Collapse open={open} className="w-full lg:order-last">
@@ -182,7 +210,7 @@ export default function Home() {
           </Glass>
         </Collapse>
 
-        <Glass className="min-w-0 flex-[2_1_320px] py-[18px] pr-4 pl-2.5 lg:rounded-[36px] lg:py-6 lg:pr-5 lg:pl-4">
+        <Glass className="min-w-0 py-[18px] pr-4 pl-2.5 max-lg:order-1 lg:flex-[2_1_320px] lg:rounded-[36px] lg:py-6 lg:pr-5 lg:pl-4">
           <div className="flex items-center justify-between pl-3">
             <div className="text-sm font-bold lg:text-[15px]">Pagos del mes</div>
             <Link to="/pagos" className="text-[13px] font-semibold text-brand">

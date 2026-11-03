@@ -143,8 +143,8 @@ export function Loading() {
 // Animated show/hide of a block inside a flex/grid column: height + fade, and the parent's gap
 // collapses with it. Keeps the last content mounted while it closes.
 export function Collapse({ open, children, className }: { open: boolean; children: ReactNode; className?: string }) {
-  const last = useRef(children)
-  if (open) last.current = children
+  const [last, setLast] = useState(children)
+  if (open && last !== children) setLast(children)
   const ref = useRef<HTMLDivElement>(null)
   const [settled, setSettled] = useState(open)
   useLayoutEffect(() => {
@@ -162,7 +162,7 @@ export function Collapse({ open, children, className }: { open: boolean; childre
       )}
     >
       <div inert={!open} className={cn('min-h-0 min-w-0', !(open && settled) && 'overflow-hidden')}>
-        {open ? children : last.current}
+        {open ? children : last}
       </div>
     </div>
   )
@@ -184,13 +184,13 @@ export function usePresence(open: boolean) {
 }
 
 export function Presence({ open, children, className }: { open: boolean; children: ReactNode; className?: string }) {
-  const last = useRef(children)
-  if (open) last.current = children
+  const [last, setLast] = useState(children)
+  if (open && last !== children) setLast(children)
   const { mounted, props } = usePresence(open)
   if (!mounted) return null
   return (
     <div {...props} className={cn('pop', className)}>
-      {open ? children : last.current}
+      {open ? children : last}
     </div>
   )
 }
@@ -242,7 +242,9 @@ export function SheetHeader({ title, onClose, className }: { title: string; onCl
 // Single-key shortcut. Ignored while typing or with a menu/popover open; `inDialog` lets it run with the form open.
 export function useShortcut(key: string, fn: () => void, inDialog = false) {
   const latest = useRef(fn)
-  latest.current = fn
+  useEffect(() => {
+    latest.current = fn
+  })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== key || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return

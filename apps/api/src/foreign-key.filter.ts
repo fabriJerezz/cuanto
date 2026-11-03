@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
+import type { Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 
 // Deleting an account that still has movements or fixed expenses hits a RESTRICT foreign key.
@@ -9,7 +10,7 @@ export class ForeignKeyFilter extends BaseExceptionFilter {
     if (!/FOREIGN KEY/i.test(err.message)) return super.catch(err, host);
     host
       .switchToHttp()
-      .getResponse()
+      .getResponse<Response>()
       .status(409)
       .json({ statusCode: 409, message: 'Tiene movimientos o gastos fijos asociados' });
   }

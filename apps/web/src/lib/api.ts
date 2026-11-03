@@ -97,6 +97,8 @@ export interface Summary {
   free: number
   totalInAccounts: number
   cardDebt: number
+  income: number
+  expense: number
   accounts: { id: number; name: string; type: AccountType; balance: number; pct: number | null; split: { free: number; pending: number; others: number } | null }[]
   owners: { free: number; pending: number; others: number; freePct: number; pendingPct: number; othersPct: number }
   payments: Payment[]
@@ -124,13 +126,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
+    const err = (await res.json().catch(() => ({}))) as { message?: string | string[] }
     const msg = Array.isArray(err.message) ? err.message.join('. ') : err.message
     throw new ApiError(msg ?? `Error ${res.status}`, res.status)
   }
   const text = await res.text()
   // Empty bodies (204) resolve to null: TanStack Query rejects undefined data.
-  return text ? JSON.parse(text) : (null as T)
+  return (text ? JSON.parse(text) : null) as T
 }
 
 export const api = {

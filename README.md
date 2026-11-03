@@ -11,9 +11,10 @@ Monorepo con pnpm workspaces:
 
 ```sh
 pnpm install
-pnpm dev        # api en :3000, web en :5173 (hace proxy de /api)
+pnpm dev        # api en :3100, web en :5173 (hace proxy de /api)
 pnpm test       # tests e2e de la api (SQLite en memoria)
 pnpm build
+pnpm check      # lo mismo que corre CI en cada push: lint, tipos, código sin usar, tests, build y auditoría
 ```
 
 La base de datos es `apps/api/cuanto.sqlite` (se cambia con `DB_PATH`). El esquema se sincroniza al arrancar; todavía no hay migraciones. Sin cuentas cargadas, la app abre el onboarding de "Primer uso".

@@ -13,13 +13,18 @@ describe('ledger', () => {
   const summary = async () => (await api().get('/api/summary?month=2026-10').expect(200)).body;
 
   beforeAll(async () => {
+    // New event payments land in the current month; only Date is faked so I/O keeps working.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-15T12:00:00') });
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
     configure(app);
     await app.init();
     agent = request.agent(app.getHttpServer());
   });
-  afterAll(() => app.close());
+  afterAll(async () => {
+    vi.useRealTimers();
+    await app.close();
+  });
 
   it('asks for the PIN', async () => {
     await agent.get('/api/summary').expect(401);
@@ -71,6 +76,8 @@ describe('ledger', () => {
     // Only your half of the barbecue counts against the budget.
     expect(s.budgets[0]).toMatchObject({ name: 'Comida', spent: 38400 + 30000, limit: 200000 });
     expect(s.eventsWithOthers).toEqual({ count: 1, amount: 70000 });
+    // No transfers, nothing of Lucas's or Mica's, and only your half of the barbecue.
+    expect(s).toMatchObject({ income: 0, expense: 38400 + 30000 + 280000 });
 
     const lucas = (await api().get(`/api/people/${lucasIn.personId}`).expect(200)).body;
     expect(lucas).toMatchObject({ balance: -70000, received: 100000, spent: 30000 });
@@ -156,6 +163,17 @@ describe('ledger', () => {
       expect(free + pending + others).toBe(Math.max(0, a.balance));
       expect(Math.min(pending, others)).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it('totals your income and expenses per month', async () => {
+    const [bank] = (await api().get('/api/accounts').expect(200)).body;
+    const base = { date: '2026-12-05T10:00', accountId: bank.id };
+    await post('/movements', { ...base, type: 'income', amount: 500000 });
+    await post('/movements', { ...base, type: 'expense', amount: 120000 });
+    await post('/movements', { ...base, type: 'income', amount: 9000, isOthers: true, newPersonName: 'Flor' });
+    const december = (await api().get('/api/summary?month=2026-12').expect(200)).body;
+    expect(december).toMatchObject({ income: 500000, expense: 120000 });
+    expect((await summary()).income).toBe(0);
   });
 
   it('rejects inconsistent movements and deleting used accounts', async () => {

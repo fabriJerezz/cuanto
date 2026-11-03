@@ -71,7 +71,7 @@ export default function Onboarding() {
 
   const finish = async () => {
     await queryClient.invalidateQueries()
-    navigate('/', { replace: true })
+    void navigate('/', { replace: true })
   }
 
   return (
