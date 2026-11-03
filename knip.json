@@ -1,0 +1,6 @@
+{
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "apps/web/src/components/ui/**": ["exports"]
+  }
+}

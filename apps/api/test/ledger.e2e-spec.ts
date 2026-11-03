@@ -13,13 +13,18 @@ describe('ledger', () => {
   const summary = async () => (await api().get('/api/summary?month=2026-10').expect(200)).body;
 
   beforeAll(async () => {
+    // New event payments land in the current month; only Date is faked so I/O keeps working.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-15T12:00:00') });
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
     configure(app);
     await app.init();
     agent = request.agent(app.getHttpServer());
   });
-  afterAll(() => app.close());
+  afterAll(async () => {
+    vi.useRealTimers();
+    await app.close();
+  });
 
   it('asks for the PIN', async () => {
     await agent.get('/api/summary').expect(401);

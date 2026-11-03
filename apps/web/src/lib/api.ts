@@ -126,13 +126,13 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
+    const err = (await res.json().catch(() => ({}))) as { message?: string | string[] }
     const msg = Array.isArray(err.message) ? err.message.join('. ') : err.message
     throw new ApiError(msg ?? `Error ${res.status}`, res.status)
   }
   const text = await res.text()
   // Empty bodies (204) resolve to null: TanStack Query rejects undefined data.
-  return text ? JSON.parse(text) : (null as T)
+  return (text ? JSON.parse(text) : null) as T
 }
 
 export const api = {

@@ -164,7 +164,7 @@ function AddOneOff() {
   const acc = sources.find((a) => a.id === accountId) ?? sources.find((a) => a.type === 'wallet') ?? sources[0]
   const n = parseMoney(amount)
   const save = useSave(() =>
-    api.post('/fixed-expenses', { name: name.trim(), amount: n, dayOfMonth: Math.min(31, Math.max(1, Number(day) || 1)), accountId: acc!.id, month: currentMonth() }),
+    api.post('/fixed-expenses', { name: name.trim(), amount: n, dayOfMonth: Math.min(31, Math.max(1, Number(day) || 1)), accountId: acc.id, month: currentMonth() }),
   )
   const ready = !!name.trim() && n > 0 && !!acc
 
